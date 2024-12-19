@@ -1,6 +1,9 @@
+// Надо переделать калькулятор в соответствии с изменениями в других файлах.
+
 package calculator
 
 import (
+	"calculator_app/internal/utils"
 	"errors"
 	"fmt"
 	"strconv"
@@ -43,28 +46,6 @@ func precedence(op string) int {
 	return 0
 }
 
-// Функция проверяет, является ли c одним из математических операторов.
-func isOperator(c string) bool {
-	//return c == "+" || c == "-" || c == "*" || c == "/"
-	// Проверка на пустую строку
-	if c == "" {
-		return false
-	}
-
-	operators := "+-*/"
-	return strings.Contains(operators, c)
-}
-
-func isDigit(c string) bool {
-	// Проверка на пустую строку
-	if strings.TrimSpace(c) == "" {
-		return false
-	}
-
-	_, err := strconv.ParseFloat(c, 64)
-	return err == nil
-}
-
 // преобразование математических выражений
 func shuntingYard(expression string) ([]string, error) {
 	var output []string
@@ -75,7 +56,7 @@ func shuntingYard(expression string) ([]string, error) {
 	tokens := splitExpression(expression)
 
 	for _, token := range tokens {
-		if isDigit(token) {
+		if utils.IsDigit(token) {
 			output = append(output, token)
 		} else if token == "(" {
 			operators.Push(token)
@@ -90,7 +71,7 @@ func shuntingYard(expression string) ([]string, error) {
 				}
 			}
 			operators.Pop() // Удаляем "("
-		} else if isOperator(token) {
+		} else if utils.IsOperator(token) {
 			for len(operators) > 0 && precedence(operators.Top()) >= precedence(token) {
 				output = append(output, operators.Pop())
 			}
@@ -138,9 +119,9 @@ func evaluatePostfix(postfix []string) (float64, error) {
 	var stack Stack
 
 	for _, token := range postfix {
-		if isDigit(token) {
+		if utils.IsDigit(token) {
 			stack.Push(token)
-		} else if isOperator(token) {
+		} else if utils.IsOperator(token) {
 			if len(stack) < 2 {
 				return 0, errors.New("invalid expression: not enough operands")
 			}
@@ -216,27 +197,9 @@ func Calc(expression string) (float64, error) {
 		return 0, errors.New("Brackets are not balanced")
 	}
 
-	// Проверяем наличие символов, отличных от цифр, операций и скобок
-	for _, char := range expression {
-		if !((char >= '0' && char <= '9') || (char == '+' || char == '-' || char == '*' || char == '/' || char == '(' || char == ')' || char == ' ')) {
-			return 0, errors.New("Invalid character in expression")
-		}
-	}
 	postfix, err := shuntingYard(expression)
 	if err != nil {
 		return 0, err
 	}
 	return evaluatePostfix(postfix)
 }
-
-/*
-func main() {
-	expression := " ( 2+ 2) *2"
-	result, err := Calc(expression)
-	if err != nil {
-		fmt.Println("Error:", err)
-	} else {
-		fmt.Println(result)
-	}
-}
-*/
