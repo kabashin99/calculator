@@ -1,0 +1,39 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is an example API.",
+        "title": "Example API",
+        "contact": {
+            "name": "Your Name",
+            "url": "http://example.com",
+            "email": "your.email@example.com"
+        },
+        "version": "1.0"
+    },
+    "basePath": "/api/v1",
+    "paths": {
+        "/api/v1/calculate": {
+            "post": {
+                "description": "Get a greeting message",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "greetings"
+                ],
+                "summary": "Get a greeting message",
+                "responses": {
+                    "200": {
+                        "description": "{\"message\": \"Hello, World!\"}",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
