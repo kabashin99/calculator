@@ -51,8 +51,6 @@ func shuntingYard(expression string) ([]string, error) {
 	var output []string
 	var operators Stack
 
-	// tokens := strings.Fields(expression)
-	// Разбиваем выражение на токены, учитывая пробелы и скобки
 	tokens := splitExpression(expression)
 
 	for _, token := range tokens {
@@ -62,32 +60,31 @@ func shuntingYard(expression string) ([]string, error) {
 			operators.Push(token)
 		} else if token == ")" {
 			if len(operators) == 0 {
-				return nil, errors.New("mismatched parentheses")
+				return nil, errors.New("несоответствующие скобки")
 			}
 			for operators.Top() != "(" {
 				output = append(output, operators.Pop())
 				if len(operators) == 0 {
-					return nil, errors.New("mismatched parentheses")
+					return nil, errors.New("несоответствующие скобки")
 				}
 			}
-			operators.Pop() // Удаляем "("
+			operators.Pop()
 		} else if utils.IsOperator(token) {
 			for len(operators) > 0 && precedence(operators.Top()) >= precedence(token) {
 				output = append(output, operators.Pop())
 			}
 			operators.Push(token)
 		} else {
-			return nil, errors.New("invalid token: " + token)
+			return nil, errors.New("неверный токен: " + token)
 		}
 	}
 
 	for len(operators) > 0 {
 		if operators.Top() == "(" {
-			return nil, errors.New("mismatched parentheses")
+			return nil, errors.New("несоответствующие скобки")
 		}
 		output = append(output, operators.Pop())
 	}
-
 	return output, nil
 }
 
@@ -123,7 +120,7 @@ func evaluatePostfix(postfix []string) (float64, error) {
 			stack.Push(token)
 		} else if utils.IsOperator(token) {
 			if len(stack) < 2 {
-				return 0, errors.New("invalid expression: not enough operands")
+				return 0, errors.New("недопустимое выражение: недостаточно операндов")
 			}
 			b := stack.Pop()
 			a := stack.Pop()
@@ -132,7 +129,7 @@ func evaluatePostfix(postfix []string) (float64, error) {
 			numB, errB := strconv.ParseFloat(b, 64)
 
 			if errA != nil || errB != nil {
-				return 0, errors.New("invalid number format")
+				return 0, errors.New("неверный формат числа")
 			}
 
 			var result float64
@@ -145,26 +142,26 @@ func evaluatePostfix(postfix []string) (float64, error) {
 				result = numA * numB
 			case "/":
 				if numB == 0 {
-					return 0, errors.New("division by zero")
+					return 0, errors.New("деление на ноль")
 				}
 				result = numA / numB
 			default:
-				return 0, errors.New("unknown operator: " + token)
+				return 0, errors.New("неизвестный оператор: " + token)
 			}
 			stack.Push(fmt.Sprintf("%f", result))
 		} else {
-			return 0, errors.New("invalid token: " + token)
+			return 0, errors.New("неверный токен: " + token)
 		}
 	}
 
 	if len(stack) != 1 {
-		return 0, errors.New("invalid expression: too many operands remaining")
+		return 0, errors.New("недопустимое выражение: осталось слишком много операндов")
 	}
 
 	resultStr := stack.Pop()
 	result, err := strconv.ParseFloat(resultStr, 64)
 	if err != nil {
-		return 0, errors.New("invalid number format")
+		return 0, errors.New("неверный формат числа")
 	}
 	return result, nil
 }
@@ -173,7 +170,7 @@ func addSpaceAfterChars(str string) string {
 	result := ""
 	for i, char := range str {
 		result += string(char)
-		if i < len(str)-1 { // Не добавляем пробел после последнего символа
+		if i < len(str)-1 {
 			result += " "
 		}
 	}
@@ -182,19 +179,16 @@ func addSpaceAfterChars(str string) string {
 
 func Calc(expression string) (float64, error) {
 
-	// Удаляем пробелы из выражения
 	expression = addSpaceAfterChars(strings.ReplaceAll(expression, " ", ""))
 
-	// Проверяем, является ли выражение пустым
 	if expression == "" {
-		return 0, errors.New("Expression is empty")
+		return 0, errors.New("выражение пустое")
 	}
 
-	// Проверяем наличие скобок
 	openBracketsCount := strings.Count(expression, "(")
 	closeBracketsCount := strings.Count(expression, ")")
 	if openBracketsCount != closeBracketsCount {
-		return 0, errors.New("Brackets are not balanced")
+		return 0, errors.New("скобки не сбалансированы")
 	}
 
 	postfix, err := shuntingYard(expression)

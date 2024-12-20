@@ -26,13 +26,12 @@ import (
 // @Router /api/v1/calculate [post]
 func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		//http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		w.WriteHeader(http.StatusMethodNotAllowed) // STATUS 405
 		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Метод не разрешен"})
 		return
 	}
 
-	var req models.Request //request
+	var req models.Request
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -40,12 +39,6 @@ func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Ошибка декодирования JSON"})
 		return
 	}
-	/*
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request payload", http.StatusBadRequest)
-			return
-		}
-	*/
 
 	if !utils.IsValidExpression(req.Expression) {
 		w.WriteHeader(http.StatusUnprocessableEntity) // STATUS 422
@@ -55,13 +48,12 @@ func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := calculator.Calc(req.Expression)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError) // STATUS 500
-		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Internal server error"})
+		w.WriteHeader(http.StatusInternalServerError)                       // STATUS 500
+		json.NewEncoder(w).Encode(models.ErrorResponse{Error: err.Error()}) // "Internal server error"
 		return
-		//http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusUnprocessableEntity)
 	}
 
-	response := models.SuccessResponse{Result: fmt.Sprintf("%f", result)} // response
+	response := models.SuccessResponse{Result: fmt.Sprintf("%f", result)}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // STATUS 200
 	json.NewEncoder(w).Encode(response)
