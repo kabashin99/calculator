@@ -71,7 +71,7 @@ Content           : {"result":"8.000000"}
 
 Запуск тестов 
 ```bash
-go test -cover ./tests
+go test -cover calculator_app/internal/... -v
 ```
 
 ## Документация

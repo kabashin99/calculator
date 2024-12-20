@@ -27,7 +27,7 @@ import (
 func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed) // STATUS 405
-		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Метод не разрешен"})
+		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "метод не разрешен"})
 		return
 	}
 
@@ -36,19 +36,19 @@ func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest) // STATUS 400
-		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Ошибка декодирования JSON"})
+		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "ошибка декодирования JSON"})
 		return
 	}
 
 	if !utils.IsValidExpression(req.Expression) {
 		w.WriteHeader(http.StatusUnprocessableEntity) // STATUS 422
-		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "Expression is not valid"})
+		json.NewEncoder(w).Encode(models.ErrorResponse{Error: "недопустимые символы"})
 		return
 	}
 
 	result, err := calculator.Calc(req.Expression)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)                       // STATUS 500
+		w.WriteHeader(http.StatusUnprocessableEntity)                       // STATUS 422
 		json.NewEncoder(w).Encode(models.ErrorResponse{Error: err.Error()}) // "Internal server error"
 		return
 	}
