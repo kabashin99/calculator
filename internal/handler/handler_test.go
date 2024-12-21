@@ -130,7 +130,7 @@ func TestCalculateHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf("error decoding response: %v", err)
 		}
-		if !strings.Contains(response.Error, "деление на ноль") { // сообщение об ошибке может меняться в зависимости от реализации Calc
+		if !strings.Contains(response.Error, "деление на ноль") {
 			t.Errorf("expected error message containing 'деление на ноль', got '%s'", response.Error)
 		}
 	})

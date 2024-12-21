@@ -10,12 +10,10 @@ import (
 
 type Stack []string
 
-// Добавление элемента в стек
 func (s *Stack) Push(value string) {
 	*s = append(*s, value)
 }
 
-// извлекает и возвращает верхний элемент стека. Если стек пуст, он возвращает пустую строку.
 func (s *Stack) Pop() string {
 	if len(*s) == 0 {
 		return ""
@@ -25,7 +23,6 @@ func (s *Stack) Pop() string {
 	return value
 }
 
-// получение верхнего элемента стека без его удаления
 func (s *Stack) Top() string {
 	if len(*s) == 0 {
 		return ""
@@ -33,7 +30,6 @@ func (s *Stack) Top() string {
 	return (*s)[len(*s)-1]
 }
 
-// позволяет определить приоритет математических операторов
 func precedence(op string) int {
 	switch op {
 	case "+", "-":
@@ -44,7 +40,6 @@ func precedence(op string) int {
 	return 0
 }
 
-// преобразование математических выражений
 func shuntingYard(expression string) ([]string, error) {
 	var output []string
 	var operators Stack
@@ -86,7 +81,6 @@ func shuntingYard(expression string) ([]string, error) {
 	return output, nil
 }
 
-// Функция для разделения выражения на токены, учитывая пробелы и скобки
 func splitExpression(expression string) []string {
 	var tokens []string
 	currentToken := ""
@@ -109,7 +103,6 @@ func splitExpression(expression string) []string {
 	return tokens
 }
 
-// функция вычисляет результаты математических выражений
 func evaluatePostfix(postfix []string) (float64, error) {
 	var stack Stack
 

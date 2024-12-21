@@ -1,16 +1,15 @@
-// @title Example API
+// @title Calculator API
 // @version 1.0
-// @description This is an example API.
-// @contact.name Your Name
-// @contact.url http://example.com
-// @contact.email your.email@example.com
+// @description HTTP-сервер, который обрабатывает входящие арифметические выражения и возвращает результаты вычислений
+// @host localhost:8080
 // @BasePath /api/v1
+
 package main
 
 import (
+	_ "calculator_app/docs"
 	"calculator_app/internal/handler"
 	"calculator_app/internal/middleware"
-	_ "calculator_app/swagger"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"log"
 	"net/http"
@@ -19,7 +18,8 @@ import (
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/calculate", handler.CalculateHandler)
-	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
+	mux.Handle("/swagger/", httpSwagger.WrapHandler)
+	//http.Handle("/swagger/", http.StripPrefix("/swagger", httpSwagger.WrapHandler))
 
 	loggedMux := middleware.Logging(mux)
 

@@ -46,7 +46,12 @@ exit status 1
 
 ## Примеры запросов/ ответов
 
-Запрос (для Windows)
+Запрос 
+```bash
+curl -X POST http://localhost:8080/api/v1/calculate -H "Content-Type: application/json" -d '{"expression": "3 + 5"}'
+```
+
+Запрос (для Windows если не работает *curl*)
 ```powershell
 $headers = @{"Content-Type" = "application/json"}
 $body = '{"expression": "3 + 5"}'
@@ -54,10 +59,6 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8080/api/v1/calculate" `
     -Method Post `
     -Headers $headers `
     -Body $body
-```
-Запрос (для Linux)
-```bash
-curl -X POST http://localhost:8080/api/v1/calculate -H "Content-Type: application/json" -d '{"expression": "3 + 5"}'
 ```
 
 Ответ 
@@ -71,11 +72,11 @@ Content           : {"result":"8.000000"}
 
 Запуск тестов 
 ```bash
-go test -cover calculator_app/internal/... -v
+go test -cover calculator_app/internal/...
 ```
 
 ## Документация
-Документация в формате swagger по методам API <http://localhost:8080/docs> (доступна после запуска сервера)
+Документация в формате swagger по методам API <http://localhost:8080/swagger/> (доступна после запуска сервера)
 
 
 Автор: Абашин Ярослав
