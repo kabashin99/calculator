@@ -13,6 +13,11 @@ var logFile *os.File
 
 func init() {
 	var err error
+	err = os.MkdirAll("logs", os.ModePerm)
+	if err != nil && !os.IsExist(err) {
+		log.Fatalf("Error creating logs directory: %v", err)
+	}
+
 	logFile, err = os.OpenFile("logs/server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Error opening log file: %v", err)
