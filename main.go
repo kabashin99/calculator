@@ -16,16 +16,25 @@ import (
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/calculate", handler.CalculateHandler)
-	mux.Handle("/swagger/", httpSwagger.WrapHandler)
-	//http.Handle("/swagger/", http.StripPrefix("/swagger", httpSwagger.WrapHandler))
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("/api/v1/calculate", handler.CalculateHandler)
 
-	loggedMux := middleware.Logging(mux)
+	swaggerMux := http.NewServeMux()
+	swaggerMux.Handle("/swagger/", httpSwagger.WrapHandler)
 
-	log.Println("Сервер запущен на :8080")
-	if err := http.ListenAndServe(":8080", loggedMux); err != nil {
-		log.Fatalf("Ошибка при запуске сервера: %s\n", err)
+	loggedMux := middleware.Logging(apiMux)
+
+	go func() {
+		log.Println("Сервер для API запущен на :8080")
+		if err := http.ListenAndServe(":8080", loggedMux); err != nil {
+			log.Fatalf("Ошибка при запуске сервера: %s\n", err)
+		}
+	}()
+
+	log.Println("Сервер для Swagger запущен на :8081")
+	if err := http.ListenAndServe(":8081", swaggerMux); err != nil {
+		log.Fatalf("Ошибка при запуске сервера для Swagger: %s\n", err)
 	}
+
 	middleware.CloseLogFile()
 }
