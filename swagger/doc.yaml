@@ -1,0 +1,26 @@
+basePath: /api/v1
+info:
+  contact:
+    email: your.email@example.com
+    name: Your Name
+    url: http://example.com
+  description: This is an example API.
+  title: Example API
+  version: "1.0"
+paths:
+  /api/v1/calculate:
+    post:
+      consumes:
+      - application/json
+      description: Get a greeting message
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"message": "Hello, World!"}'
+          schema:
+            type: string
+      summary: Get a greeting message
+      tags:
+      - greetings
+swagger: "2.0"
