@@ -76,8 +76,13 @@ go test -cover calculator_app/internal/...
 ```
 
 ## Документация
-Документация в формате swagger по методам API <http://localhost:8080/swagger/> (доступна после запуска сервера)
-
+Документация в формате swagger по методам API <http://localhost:8081/swagger/> (доступна после запуска сервера!)
+В случае сообщения об ошибке:
+```bash
+2024/12/20 22:40:26 Ошибка при запуске сервера: listen tcp :8081: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+exit status 1 
+```
+Поменяйте в файле `main.go` порт *8081* на любой свободный
 
 Автор: Абашин Ярослав
 Telegram: @kabashin
