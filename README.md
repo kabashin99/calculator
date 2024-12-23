@@ -67,6 +67,37 @@ StatusCode        : 200
 StatusDescription : OK
 Content           : {"result":"8.000000"}
 ```
+# Примеры некорректных запросов/ ответов
+Запрос: 
+```bash
+curl -X POST localhost:8080/api/v1/calculate -H "Content-Type: application/json" --data "{\"expression\": \"2+3\"}"
+```
+Ответ:
+```bash
+{"error":"ошибка декодирования JSON"}
+```
+HTTP статус:  400
+
+Запрос: 
+```bash
+curl -X POST GET  localhost:8080/api/v1/calculate -H "Content-Type: application/json"  --data "{"expression": "2+3"}"
+```
+Ответ:
+```bash
+{"error":"метод не разрешен"}
+```
+HTTP статус: 405
+
+Запрос: 
+```bash
+curl -X POST POST  localhost:8080/api/v1/calculate -H "Content-Type: application/json"  --data "{"expression": "2+35"}"
+```
+
+Ответ:
+```bash
+{"error":"недопустимое выражение: осталось слишком много операндов"}
+```
+HTTP статус: 422
 
 ## Тесты
 
