@@ -70,7 +70,7 @@ Content           : {"result":"8.000000"}
 ### Примеры некорректных запросов/ ответов
 Запрос: 
 ```bash
-curl -X POST localhost:8080/api/v1/calculate -H "Content-Type: application/json" --data "\"expression\": \"2+3\"}"
+curl -X POST localhost:8080/api/v1/calculate -H "Content-Type: application/json" --data "{\"expression\": \"2+3\",}"
 ```
 Ответ:
 ```bash
