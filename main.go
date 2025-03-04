@@ -8,8 +8,8 @@ package main
 
 import (
 	_ "calculator_app/docs"
-	"calculator_app/internal/handler"
-	"calculator_app/internal/middleware"
+	"calculator_app/internal/orchestrator/handler"
+	"calculator_app/internal/pkg/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"log"
 	"net/http"

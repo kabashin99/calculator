@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Distributed Calculator</title>
+    <style>
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .expression-list { margin-top: 20px; }
+        .expression-item { padding: 10px; border: 1px solid #ddd; margin: 5px 0; }
+        .status-pending { color: orange; }
+        .status-done { color: green; }
+        .status-error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Калькулятор выражений</h1>
+
+    <!-- Форма для ввода выражения -->
+    <form id="expressionForm">
+        <input type="text" id="expressionInput" placeholder="2+2*2" required>
+        <button type="submit">Отправить</button>
+    </form>
+
+    <!-- Список выражений -->
+    <div class="expression-list" id="expressionList">
+        <h2>История вычислений</h2>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

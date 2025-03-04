@@ -13,9 +13,9 @@
 package handler
 
 import (
-	"calculator_app/internal/calculator"
 	"calculator_app/internal/models"
-	"calculator_app/internal/utils"
+	"calculator_app/internal/pkg/calculator"
+	"calculator_app/internal/pkg/utils"
 	"encoding/json"
 	"fmt"
 	"net/http"

@@ -1,7 +1,7 @@
 package calculator
 
 import (
-	"calculator_app/internal/utils"
+	"calculator_app/internal/pkg/utils"
 	"errors"
 	"fmt"
 	"strconv"
