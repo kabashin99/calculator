@@ -9,11 +9,11 @@ import (
 )
 
 type Worker struct {
-	client client.OrchestratorClient
+	client agentClient.OrchestratorClient
 	config *config.Config
 }
 
-func NewWorker(client client.OrchestratorClient, config *config.Config) *Worker {
+func NewWorker(client agentClient.OrchestratorClient, config *config.Config) *Worker {
 	return &Worker{
 		client: client,
 		config: config,
