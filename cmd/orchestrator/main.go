@@ -1,46 +1,31 @@
 package main
 
 import (
+	"calculator_app/internal/config"
 	"calculator_app/internal/orchestrator/handler"
-	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/orchestrator/service"
-	"database/sql"
 	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
-	// Открываем базу данных
-	db, err := sql.Open("sqlite", "./database.db?_journal=WAL&_busy_timeout=5000")
+	// Загружаем конфигурацию
+	cfg, err := config.LoadConfig("config/config.txt")
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
-	defer db.Close()
-
-	// Проверяем подключение
-	if err := db.Ping(); err != nil {
-		log.Fatal("Failed to ping database:", err)
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Инициализируем репозитории
-	exprRepo := repository.NewExpressionRepository(db)
-	taskRepo := repository.NewTaskRepository(db)
+	// Создаем оркестратор с настройками из конфигурации
+	orc := service.NewOrchestrator(cfg.TimeAdditionMS, cfg.TimeSubtractionMS, cfg.TimeMultiplicationMS, cfg.TimeDivisionMS)
+	OrchHandler := handler.NewHandler(orc)
 
-	// Инициализируем сервисы
-	exprService := service.NewExpressionService(exprRepo, taskRepo)
-	taskService := service.NewTaskService(taskRepo, exprRepo)
+	// Регистрируем HTTP-обработчики
+	http.HandleFunc("POST /api/v1/calculate", OrchHandler.AddExpression)
+	http.HandleFunc("GET /api/v1/expressions", OrchHandler.GetExpressions)
+	http.HandleFunc("GET /api/v1/expressions/{id}", OrchHandler.GetExpressionByID)
+	http.HandleFunc("GET /internal/task", OrchHandler.GetTask)
+	http.HandleFunc("POST /internal/task", OrchHandler.SubmitResult)
 
-	// Создаём маршрутизатор
-	router := mux.NewRouter()
-
-	// Регистрируем обработчики
-	handler.InitExpressionHandlers(router, exprService)
-	handler.InitTaskHandlers(router, taskService)
-
-	// Запускаем сервер
 	log.Println("Оркестратор запущен на :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }

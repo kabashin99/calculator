@@ -1,41 +1,23 @@
 package main
 
 import (
-	"calculator_app/config"
-	agentClient "calculator_app/internal/agent/client"
-	"calculator_app/internal/agent/worker"
+	"calculator_app/internal/agent"
+	"calculator_app/internal/config"
 	"log"
-	"os"
-	"strconv"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
+	// Загружаем конфигурацию
+	cfg, err := config.LoadConfig("config/config.txt")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	cfg := config.Load()
+	// Создаем агента с настройками из конфигурации
+	log.Printf("Agent started with %d workers", cfg.ComputingPower)
+	agentInstance := agent.NewAgent("http://localhost:8080", cfg.ComputingPower)
+	agentInstance.Start()
 
-	orchestratorURL := os.Getenv("ORCHESTRATOR_URL")
-	if orchestratorURL == "" {
-		orchestratorURL = "http://localhost:8080"
-	}
-
-	workersStr := os.Getenv("COMPUTING_POWER")
-	workers, err := strconv.Atoi(workersStr)
-	if err != nil {
-		log.Fatalf("Invalid COMPUTING_POWER value: %v", err)
-	}
-
-	// Создание клиента
-	orchestratorClient := agentClient.NewClient(orchestratorURL)
-
-	// Запуск воркеров
-	worker.StartWorkers(orchestratorClient, cfg, workers)
-
-	log.Printf("Agent started with %d workers", workers)
-	select {} // Бесконечное ожидание
+	// Бесконечный цикл
+	select {}
 }
