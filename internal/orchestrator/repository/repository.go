@@ -11,13 +11,6 @@ type Repository struct {
 	mu          sync.Mutex
 }
 
-func NewRepository() *Repository {
-	return &Repository{
-		expressions: make(map[string]*models.Expression),
-		tasks:       make([]*models.Task, 0),
-	}
-}
-
 func (r *Repository) AddExpression(expression *models.Expression) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

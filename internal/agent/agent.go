@@ -24,7 +24,7 @@ func NewAgent(orchestratorURL string, computingPower int) *Agent {
 }
 
 func (a *Agent) Start() {
-	results := make(map[string]float64) // Хранилище результатов задач
+	results := make(map[string]float64)
 	log.Printf("Agent started with %d workers", a.computingPower)
 
 	for i := 0; i < a.computingPower; i++ {
@@ -42,14 +42,34 @@ func (a *Agent) worker(results map[string]float64) {
 		}
 
 		log.Printf("Task received: %+v", task)
-		result := a.executeTask(task, results)
+
+		for _, depID := range task.DependsOn {
+			for {
+				if result, ok := results[depID]; ok {
+					if task.Arg1 == 0 {
+						task.Arg1 = result
+					} else {
+						task.Arg2 = result
+					}
+					log.Printf("Updated task %s with dependency %s: Arg1=%f, Arg2=%f",
+						task.ID, depID, task.Arg1, task.Arg2)
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
+
+		result := a.executeTask(task)
+		results[task.ID] = result
+
 		log.Printf("Task result: %f", result)
 
-		if err := a.submitResult(task.ID, result); err != nil {
-			log.Printf("Failed to submit result: %v", err)
-		} else {
-			log.Printf("Result submitted for task ID: %s", task.ID)
-			results[task.ID] = result // Сохраняем результат для использования в зависимых задачах
+		for retry := 0; retry < 3; retry++ {
+			if err := a.submitResult(task.ID, result); err == nil {
+				break
+			}
+			log.Printf("Retry %d: Failed to submit result for task %s", retry+1, task.ID)
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
@@ -75,18 +95,7 @@ func (a *Agent) fetchTask() (*models.Task, error) {
 	return response.Task, nil
 }
 
-func (a *Agent) executeTask(task *models.Task, results map[string]float64) float64 {
-	// Подставляем реальные результаты для зависимостей
-	for _, depID := range task.DependsOn {
-		if result, exists := results[depID]; exists {
-			if task.Arg1 == 0 {
-				task.Arg1 = result
-			} else if task.Arg2 == 0 {
-				task.Arg2 = result
-			}
-		}
-	}
-
+func (a *Agent) executeTask(task *models.Task) float64 {
 	log.Printf("Executing task: %s %f %s %f", task.Operation, task.Arg1, task.Operation, task.Arg2)
 	time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
 
@@ -119,6 +128,8 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 		return fmt.Errorf("failed to marshal result: %v", err)
 	}
 
+	log.Printf("Submitting result: Task ID=%s, Result=%f", taskID, result) // ✅ Лог
+
 	resp, err := http.Post(a.orchestratorURL+"/internal/task", "application/json", bytes.NewReader(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to submit result: %v", err)
@@ -129,5 +140,6 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 		return fmt.Errorf("failed to submit result: status %d", resp.StatusCode)
 	}
 
+	log.Printf("Result submitted successfully: Task ID=%s", taskID) // ✅ Лог
 	return nil
 }

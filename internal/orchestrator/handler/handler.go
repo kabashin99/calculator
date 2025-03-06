@@ -1,13 +1,14 @@
 package handler
 
 import (
-	service "calculator_app/internal/orchestrator/service"
+	"calculator_app/internal/orchestrator/service"
+	"calculator_app/internal/pkg/models"
 	"encoding/json"
 	"net/http"
 )
 
 type Handler struct {
-	orc *service.Orchestrator // Используем тип из пакета service
+	orc *service.Orchestrator
 }
 
 func NewHandler(orc *service.Orchestrator) *Handler {
@@ -19,46 +20,54 @@ func (h *Handler) AddExpression(w http.ResponseWriter, r *http.Request) {
 		Expression string `json:"expression"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusUnprocessableEntity)
+		http.Error(w, "invalid request", http.StatusUnprocessableEntity) // 422
 		return
 	}
 
-	id, err := h.orc.AddExpression(req.Expression) // Добавляем выражение
+	id, err := h.orc.AddExpression(req.Expression)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity) //422
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusCreated) // 201
 	json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
 
 func (h *Handler) GetExpressions(w http.ResponseWriter, r *http.Request) {
-	expressions := h.orc.GetExpressions() // Получаем все выражения
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"expressions": expressions})
+	exprMap := h.orc.GetExpressions()
+
+	expressions := make([]models.Expression, 0, len(exprMap))
+	for _, expr := range exprMap {
+		expressions = append(expressions, *expr)
+	}
+
+	w.WriteHeader(http.StatusOK) //200
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"expressions": expressions,
+	})
 }
 
 func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	expr, exists := h.orc.GetExpressionByID(id) // Получаем выражение по ID
+	expr, exists := h.orc.GetExpressionByID(id)
 	if !exists {
-		http.Error(w, "expression not found", http.StatusNotFound)
+		http.Error(w, "expression not found", http.StatusNotFound) //404
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK) // 200
 	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
-	task, exists := h.orc.GetTask() // Получаем задачу
+	task, exists := h.orc.GetTask()
 	if !exists {
-		http.Error(w, "no tasks available", http.StatusNotFound)
+		http.Error(w, "no tasks available", http.StatusNotFound) //404
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK) // 200
 	json.NewEncoder(w).Encode(map[string]interface{}{"task": task})
 }
 
@@ -68,14 +77,14 @@ func (h *Handler) SubmitResult(w http.ResponseWriter, r *http.Request) {
 		Result float64 `json:"result"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusUnprocessableEntity)
+		http.Error(w, "invalid request", http.StatusUnprocessableEntity) // 422
 		return
 	}
 
-	if !h.orc.SubmitResult(req.ID, req.Result) { // Отправляем результат
-		http.Error(w, "task not found", http.StatusNotFound)
+	if !h.orc.SubmitResult(req.ID, req.Result) {
+		http.Error(w, "task not found", http.StatusNotFound) // 404
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK) // 200
 }

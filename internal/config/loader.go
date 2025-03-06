@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ func LoadConfig(path string) (*Config, error) {
 
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Printf("Config file not found, using default values: %v\n", cfg)
+		log.Printf("Config file not found, using default values: %v\n", cfg)
 		return cfg, nil
 	}
 	defer file.Close()
@@ -65,6 +66,6 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("error reading config file: %v", err)
 	}
 
-	fmt.Printf("Config loaded: %v\n", cfg)
+	log.Printf("Config loaded: %v\n", cfg)
 	return cfg, nil
 }
