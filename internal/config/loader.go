@@ -50,15 +50,25 @@ func LoadConfig(path string) (*Config, error) {
 
 		switch key {
 		case "TIME_ADDITION_MS":
-			cfg.TimeAdditionMS, _ = strconv.Atoi(value)
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.TimeAdditionMS = v
+			}
 		case "TIME_SUBTRACTION_MS":
-			cfg.TimeSubtractionMS, _ = strconv.Atoi(value)
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.TimeSubtractionMS = v
+			}
 		case "TIME_MULTIPLICATION_MS":
-			cfg.TimeMultiplicationMS, _ = strconv.Atoi(value)
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.TimeMultiplicationMS = v
+			}
 		case "TIME_DIVISION_MS":
-			cfg.TimeDivisionMS, _ = strconv.Atoi(value)
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.TimeDivisionMS = v
+			}
 		case "COMPUTING_POWER":
-			cfg.ComputingPower, _ = strconv.Atoi(value)
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.ComputingPower = v
+			}
 		}
 	}
 
