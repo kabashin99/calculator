@@ -42,6 +42,8 @@ go mod tidy
 ```
 
 ### Запуск оркестратора (сервера)
+
+- **Linux/macOS: / Windows (PowerShell)**
 ```bash
 go run cmd/orchestrator/main.go
 
@@ -55,19 +57,15 @@ go run cmd/orchestrator/main.go
 
 ### Запуск агента (демона)
 
-В отдельном терминале перейдите в директорию агента и запустите его. 
+В отдельном терминале запустите агента. 
 
-- **Linux/macOS:**
+- **Linux/macOS: / Windows (PowerShell)**
 
   ```bash
-  cd cmd/agent
+  go run cmd/agent/main.go
+  
   ```
 
-- **Windows (PowerShell):**
-
-  ```powershell
-  cd cmd/agent
-  ```
 
 ### Параметры приложения
 Настройки расположены в файле *config/config.txt* 
@@ -106,7 +104,7 @@ curl --location 'http://localhost:8080/api/v1/expressions'
 
 _Пример ответа:_
 
-```json
+```bash
 {
     "expressions": [
         {"id": 550cf23a-4cd3-40d8-b1df-820d44c23479, "status": "completed", "result": 6},
@@ -119,19 +117,22 @@ _Пример ответа:_
 
 ```bash
 curl --location 'http://localhost:8080/api/v1/expressions/550cf23a-4cd3-40d8-b1df-820d44c23479'
+
 ```
 
 _Пример ответа:_
 
-```json
+```bash
 {"expression":{"id":"550cf23a-4cd3-40d8-b1df-820d44c23479","status":"done","result":6}}
+
 ```
 
 ## Тесты
 
-Запуск тестов 
+Запуск тестов из корневой директории :
 ```bash
 go test -cover calculator_app/...
+
 ```
 
 Автор: Абашин Ярослав
