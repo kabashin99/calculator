@@ -1,6 +1,6 @@
 # Проект Калькулятор
 
-Цель проекта: HTTP-сервер, который обрабатывает входящие арифметические выражения и возвращает результаты вычислений.
+Это распределённый вычислитель арифметических выражений. Система принимает выражение, разбивает его на отдельные задачи, и вычисляет результат асинхронно с помощью агента, работающего в нескольких горутинах. Веб-интерфейс позволяет пользователю отправлять выражения и наблюдать за их состоянием.
 
 ## Функциональность
 
@@ -12,11 +12,28 @@
 
 • Скобки ( и ), которые используются для задания приоритета выполнения операций.
 
+**API Оркестратора:** 
+
+    POST /api/v1/calculate — отправка арифметического выражения (например, "2+2*2") для вычисления.
+
+    GET /api/v1/expressions — получение списка всех выражений с их статусами и результатами.
+
+    GET /api/v1/expressions/{id} — получение подробной информации по конкретному выражению.
+
+    GET /internal/task — выдача задачи агенту для вычисления.
+
+    POST /internal/task — приём результата вычисленной задачи.
+
+**Агент (Worker):**
+
+Агент в цикле запрашивает задачи с эндпоинта /internal/task, выполняет операцию (с имитацией задержки, зависящей от переменных окружения) и отправляет результат обратно.
+
 ## Установка и запуск
 
 Скопируйте проект
 ```bash
 git clone https://github.com/kabashin99/calculator.git
+cd calculator
 ```
 
 Установите все необходимые зависимости
@@ -24,96 +41,98 @@ git clone https://github.com/kabashin99/calculator.git
 go mod tidy
 ```
 
-Запустите сервер
+### Запуск оркестратора (сервера)
 ```bash
-go run .
+go run cmd/orchestrator/main.go
+
 ```
 
 Сообщение при успешном запуске сервера
 ```bash
-2024/12/20 21:40:10 Сервер запущен на :8080
+2025/03/05 15:08:24 Config loaded: &{100 100 200 200 4}
+2025/03/05 15:08:24 Оркестратор запущен на :8080
 ```
 
-Запросы отправляются по адресу POST <http://localhost:8080/api/v1/calculate>
+### Запуск агента (демона)
 
-В случае сообщения об ошибке: 
-```bash
-2024/12/20 22:40:26 Ошибка при запуске сервера: listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
-exit status 1 
+В отдельном терминале перейдите в директорию агента и запустите его. 
+
+- **Linux/macOS:**
+
+  ```bash
+  cd cmd/agent
+  ```
+
+- **Windows (PowerShell):**
+
+  ```powershell
+  cd cmd/agent
+  ```
+
+### Параметры приложения
+Настройки расположены в файле *config/config.txt* 
 ```
-Поменяйте в файле `main.go` порт *8080* на любой свободный
+# Конфигурация оркестратора
+TIME_ADDITION_MS=100  #  время выполнения операции сложения в миллисекундах 
+TIME_SUBTRACTION_MS=100  # время выполнения операции вычитания в миллисекундах 
+TIME_MULTIPLICATION_MS=200  #  время выполнения операции умножения в 
+TIME_DIVISION_MS=200  # время выполнения операции деления в миллисекундах
+
+# Конфигурация агента
+COMPUTING_POWER=4  # Количество горутин 
+```
 
 
 ## Примеры запросов/ ответов
 
-Запрос 
+### 1. Отправка выражения на вычисление
+
 ```bash
-curl -X POST http://localhost:8080/api/v1/calculate -H "Content-Type: application/json" -d '{"expression": "3 + 5"}'
+curl --location 'http://localhost:8080/api/v1/calculate' `
+--header 'Content-Type: application/json' `
+--data '{"expression": "2+2*2"}'
 ```
 
-Запрос (для Windows если не работает *curl*)
-```powershell
-$headers = @{"Content-Type" = "application/json"}
-$body = '{"expression": "3 + 5"}'
-Invoke-WebRequest -Uri "http://127.0.0.1:8080/api/v1/calculate" `
-    -Method Post `
-    -Headers $headers `
-    -Body $body
+_Ожидаемый ответ (при успешном принятии выражения):_
+
+```json
+{"id":"550cf23a-4cd3-40d8-b1df-820d44c23479"}
+```
+### 2. Получение списка выражений
+
+```bash
+curl --location 'http://localhost:8080/api/v1/expressions'
 ```
 
-Ответ 
-```
-StatusCode        : 200
-StatusDescription : OK
-Content           : {"result":"8.000000"}
-```
-### Примеры некорректных запросов/ ответов
-Запрос: 
-```bash
-curl -X POST localhost:8080/api/v1/calculate -H "Content-Type: application/json" --data "{\"expression\": \"2+3\",}"
-```
-Ответ:
-```bash
-{"error":"ошибка декодирования JSON"}
-```
-HTTP статус:  400
+_Пример ответа:_
 
-Запрос: 
-```bash
-curl -X POST GET  localhost:8080/api/v1/calculate -H "Content-Type: application/json"  --data "{"expression": "2+3"}"
+```json
+{
+    "expressions": [
+        {"id": 550cf23a-4cd3-40d8-b1df-820d44c23479, "status": "completed", "result": 6},
+        {"id": 111cf23a-4cd3-40d8-b2df-820d44c23234, "status": "pending", "result": NaN}
+    ]
+}
 ```
-Ответ:
-```bash
-{"error":"метод не разрешен"}
-```
-HTTP статус: 405
+### 3. Получение информации по конкретному выражению
 
-Запрос: 
+
 ```bash
-curl -X POST POST  localhost:8080/api/v1/calculate -H "Content-Type: application/json"  --data "{"expression": "2+35"}"
+curl --location 'http://localhost:8080/api/v1/expressions/550cf23a-4cd3-40d8-b1df-820d44c23479'
 ```
 
-Ответ:
-```bash
-{"error":"недопустимое выражение: осталось слишком много операндов"}
+_Пример ответа:_
+
+```json
+{"expression":{"id":"550cf23a-4cd3-40d8-b1df-820d44c23479","status":"done","result":6}}
 ```
-HTTP статус: 422
 
 ## Тесты
 
 Запуск тестов 
 ```bash
-go test -cover calculator_app/internal/...
+go test -cover calculator_app/...
 ```
-
-## Документация
-Документация в формате swagger по методам API <http://localhost:8081/swagger/> (доступна после запуска сервера!)
-В случае сообщения об ошибке:
-```bash
-2024/12/20 22:40:26 Ошибка при запуске сервера: listen tcp :8081: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
-exit status 1 
-```
-Поменяйте в файле `main.go` порт *8081* на любой свободный
 
 Автор: Абашин Ярослав
 Telegram: @kabashin
