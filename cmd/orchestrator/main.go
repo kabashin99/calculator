@@ -32,6 +32,9 @@ func main() {
 	}
 	fmt.Println("✅ Подключение к базе успешно")
 
+	// Инициализируем БД (создание таблиц)
+	repository.InitDB(db)
+
 	repo := repository.NewRepository(db)
 
 	orc := service.NewOrchestrator(cfg.TimeAdditionMS, cfg.TimeSubtractionMS, cfg.TimeMultiplicationMS, cfg.TimeDivisionMS)
