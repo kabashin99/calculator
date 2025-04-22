@@ -6,4 +6,10 @@ type Config struct {
 	TimeMultiplicationMS int
 	TimeDivisionMS       int
 	ComputingPower       int
+
+	DBHost     string
+	DBPort     string
+	DBUser     string
+	DBPassword string
+	DBName     string
 }

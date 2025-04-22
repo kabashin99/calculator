@@ -3,7 +3,10 @@ package main
 import (
 	"calculator_app/internal/config"
 	"calculator_app/internal/orchestrator/handler"
+	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/orchestrator/service"
+	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -14,8 +17,25 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatalf("ошибка подключения к базе: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("база не отвечает: %v", err)
+	}
+	fmt.Println("✅ Подключение к базе успешно")
+
+	repo := repository.NewRepository(db)
+
 	orc := service.NewOrchestrator(cfg.TimeAdditionMS, cfg.TimeSubtractionMS, cfg.TimeMultiplicationMS, cfg.TimeDivisionMS)
-	OrchHandler := handler.NewHandler(orc)
+	OrchHandler := handler.NewHandler(orc, repo)
 
 	http.HandleFunc("POST /api/v1/calculate", OrchHandler.AddExpression)
 	http.HandleFunc("GET /api/v1/expressions", OrchHandler.GetExpressions)

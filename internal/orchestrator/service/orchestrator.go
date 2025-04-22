@@ -35,18 +35,19 @@ func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, ti
 	}
 }
 
-func (o *Orchestrator) AddExpression(expression string) (string, error) {
+func (o *Orchestrator) AddExpression(userID string, expression string) (string, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	id := generateUUID()
 	o.expressions[id] = &models.Expression{
 		ID:     id,
+		UserID: userID,
 		Status: "pending",
 		Result: 0,
 	}
 
-	log.Printf("New expression added: ID=%s, Expression=%s", id, expression)
+	log.Printf("New expression added: ID=%s, UserID=%s, Expression=%s", id, userID, expression)
 
 	tasks, err := o.parseExpressionToTasks(expression, id)
 	if err != nil {
@@ -56,7 +57,6 @@ func (o *Orchestrator) AddExpression(expression string) (string, error) {
 	o.tasks = append(o.tasks, tasks...)
 	log.Printf("Tasks created for expression ID=%s: %+v", id, tasks)
 
-	// Логируем все задачи после добавления
 	log.Printf("All tasks after adding expression: %+v", o.tasks)
 
 	return id, nil

@@ -128,7 +128,7 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 		return fmt.Errorf("failed to marshal result: %v", err)
 	}
 
-	log.Printf("Submitting result: Task ID=%s, Result=%f", taskID, result) // ✅ Лог
+	log.Printf("Submitting result: Task ID=%s, Result=%f", taskID, result)
 
 	resp, err := http.Post(a.orchestratorURL+"/internal/task", "application/json", bytes.NewReader(jsonData))
 	if err != nil {
@@ -140,6 +140,6 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 		return fmt.Errorf("failed to submit result: status %d", resp.StatusCode)
 	}
 
-	log.Printf("Result submitted successfully: Task ID=%s", taskID) // ✅ Лог
+	log.Printf("Result submitted successfully: Task ID=%s", taskID)
 	return nil
 }

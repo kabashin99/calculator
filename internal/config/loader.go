@@ -15,6 +15,12 @@ const (
 	defaultTimeMultiplicationMS = 200
 	defaultTimeDivisionMS       = 200
 	defaultComputingPower       = 4
+
+	defaultDBHost     = "localhost"
+	defaultDBPort     = "5432"
+	defaultDBUser     = "postgres"
+	defaultDBPassword = "2597711"
+	defaultDBName     = "calculator"
 )
 
 func LoadConfig(path string) (*Config, error) {
@@ -24,6 +30,11 @@ func LoadConfig(path string) (*Config, error) {
 		TimeMultiplicationMS: defaultTimeMultiplicationMS,
 		TimeDivisionMS:       defaultTimeDivisionMS,
 		ComputingPower:       defaultComputingPower,
+		DBHost:               defaultDBHost,
+		DBPort:               defaultDBPort,
+		DBUser:               defaultDBUser,
+		DBPassword:           defaultDBPassword,
+		DBName:               defaultDBName,
 	}
 
 	file, err := os.Open(path)
@@ -48,6 +59,8 @@ func LoadConfig(path string) (*Config, error) {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
+		value = strings.Trim(value, `"`)
+
 		switch key {
 		case "TIME_ADDITION_MS":
 			if v, err := strconv.Atoi(value); err == nil {
@@ -69,6 +82,16 @@ func LoadConfig(path string) (*Config, error) {
 			if v, err := strconv.Atoi(value); err == nil {
 				cfg.ComputingPower = v
 			}
+		case "DB_HOST":
+			cfg.DBHost = value
+		case "DB_PORT":
+			cfg.DBPort = value
+		case "DB_USER":
+			cfg.DBUser = value
+		case "DB_PASSWORD":
+			cfg.DBPassword = value
+		case "DB_NAME":
+			cfg.DBName = value
 		}
 	}
 

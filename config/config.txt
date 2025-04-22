@@ -6,3 +6,10 @@ TIME_DIVISION_MS=200
 
 # Конфигурация агента
 COMPUTING_POWER=4
+
+# Конфигурация БД
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_USER="postgres"
+DB_PASSWORD="2597711"
+DB_NAME="calculator"
