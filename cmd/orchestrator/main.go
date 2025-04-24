@@ -37,7 +37,7 @@ func main() {
 
 	repo := repository.NewRepository(db)
 
-	orc := service.NewOrchestrator(cfg.TimeAdditionMS, cfg.TimeSubtractionMS, cfg.TimeMultiplicationMS, cfg.TimeDivisionMS)
+	orc := service.InitOrchestrator(cfg, db)
 	OrchHandler := handler.NewHandler(orc, repo)
 
 	http.HandleFunc("POST /api/v1/calculate", OrchHandler.AddExpression)

@@ -15,9 +15,9 @@ type Expression struct {
 type Task struct {
 	ID            string   `json:"id"`
 	ExpressionID  string   `json:"expression_id"`
-	Arg1          float64  `json:"arg1"`
-	Arg2          float64  `json:"arg2"`
 	Operation     string   `json:"operation"`
+	Operand1      float64  `json:"operand1"`
+	Operand2      float64  `json:"operand2"`
 	OperationTime int      `json:"operation_time"`
 	Result        float64  `json:"result"`
 	DependsOn     []string `json:"depends_on"`

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/pkg/models"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ type Orchestrator struct {
 	tasks          []*models.Task
 	completedTasks map[string]*models.Task
 	mu             sync.Mutex
+	repo           *repository.Repository
 
 	timeAdditionMS       int
 	timeSubtractionMS    int
@@ -23,11 +25,12 @@ type Orchestrator struct {
 	timeDivisionMS       int
 }
 
-func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int) *Orchestrator {
+func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo *repository.Repository) *Orchestrator {
 	return &Orchestrator{
 		expressions:          make(map[string]*models.Expression),
 		tasks:                make([]*models.Task, 0),
 		completedTasks:       make(map[string]*models.Task),
+		repo:                 repo,
 		timeAdditionMS:       timeAdditionMS,
 		timeSubtractionMS:    timeSubtractionMS,
 		timeMultiplicationMS: timeMultiplicationMS,
@@ -40,14 +43,20 @@ func (o *Orchestrator) AddExpression(userID string, expression string) (string, 
 	defer o.mu.Unlock()
 
 	id := generateUUID()
-	o.expressions[id] = &models.Expression{
+	expr := &models.Expression{
 		ID:     id,
 		UserID: userID,
 		Status: "pending",
 		Result: 0,
 	}
+	o.expressions[id] = expr
 
 	log.Printf("New expression added: ID=%s, UserID=%s, Expression=%s", id, userID, expression)
+
+	err := o.repo.AddExpression(expr)
+	if err != nil {
+		return "", err
+	}
 
 	tasks, err := o.parseExpressionToTasks(expression, id)
 	if err != nil {
@@ -56,6 +65,12 @@ func (o *Orchestrator) AddExpression(userID string, expression string) (string, 
 
 	o.tasks = append(o.tasks, tasks...)
 	log.Printf("Tasks created for expression ID=%s: %+v", id, tasks)
+
+	for _, task := range tasks {
+		if err := o.repo.AddTask(task); err != nil {
+			return "", err
+		}
+	}
 
 	log.Printf("All tasks after adding expression: %+v", o.tasks)
 
@@ -90,11 +105,12 @@ func (o *Orchestrator) parseExpressionToTasks(expression, expressionID string) (
 			left := stack[len(stack)-2]
 			stack = stack[:len(stack)-2]
 
-			taskID := fmt.Sprintf("%s-%d", expressionID, len(tasks)+1)
+			taskID := generateUUID()
 			task := &models.Task{
-				ID:        taskID,
-				Operation: token,
-				DependsOn: []string{},
+				ID:           taskID,
+				ExpressionID: expressionID,
+				Operation:    token,
+				DependsOn:    []string{},
 			}
 
 			if strings.HasPrefix(left, "task:") {
@@ -108,8 +124,8 @@ func (o *Orchestrator) parseExpressionToTasks(expression, expressionID string) (
 				right = "0"
 			}
 
-			task.Arg1 = parseFloat(left)
-			task.Arg2 = parseFloat(right)
+			task.Operand1 = parseFloat(left)
+			task.Operand2 = parseFloat(right)
 			task.OperationTime = o.getOperationTime(token)
 
 			tasks = append(tasks, task)
@@ -234,6 +250,8 @@ func (o *Orchestrator) GetExpressionByID(id string) (*models.Expression, bool) {
 }
 
 func (o *Orchestrator) GetTask() (*models.Task, bool) {
+	log.Println("[orchestrator.go] GetTask called")
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -374,4 +392,50 @@ func tokenize(expression string) []string {
 	}
 
 	return tokens
+}
+
+func (o *Orchestrator) TryFinalizeExpression(taskID string) error {
+	db := o.repo.GetDB()
+
+	var expressionID string
+	err := db.QueryRow(`SELECT expression_id FROM tasks WHERE id = $1`, taskID).Scan(&expressionID)
+	if err != nil {
+		return err
+	}
+
+	var totalTasks, doneTasks int
+	err = db.QueryRow(`
+		SELECT 
+			COUNT(*) FILTER (WHERE status = 'done'),
+			COUNT(*) 
+		FROM tasks WHERE expression_id = $1
+	`, expressionID).Scan(&doneTasks, &totalTasks)
+	if err != nil {
+		return err
+	}
+
+	if doneTasks == totalTasks {
+		var finalResult float64
+		err = db.QueryRow(`
+			SELECT result FROM tasks
+			WHERE expression_id = $1
+			ORDER BY operation_time DESC
+			LIMIT 1
+		`, expressionID).Scan(&finalResult)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`
+			UPDATE expressions 
+			SET status = 'done', result = $1
+			WHERE id = $2
+		`, finalResult, expressionID)
+
+		log.Printf("✅ Выражение %s завершено: result = %f", expressionID, finalResult)
+	}
+
+	log.Printf("🔍 Проверка на финализацию: taskID=%s, done=%d, total=%d", taskID, doneTasks, totalTasks)
+
+	return nil
 }

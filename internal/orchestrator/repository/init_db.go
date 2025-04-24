@@ -2,7 +2,6 @@ package repository
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 )
 
@@ -20,7 +19,7 @@ func InitDB(db *sql.DB) {
 	if err != nil {
 		log.Fatalf("Ошибка при создании таблицы expressions: %v", err)
 	}
-	fmt.Println("Таблица expressions успешно создана или уже существует.")
+	log.Printf("Таблица expressions успешно создана или уже существует.")
 
 	// Создание таблицы tasks
 	createTasksTableQuery := `
@@ -30,6 +29,9 @@ func InitDB(db *sql.DB) {
 			operation TEXT NOT NULL,
 			operand1 DOUBLE PRECISION NOT NULL,
 			operand2 DOUBLE PRECISION NOT NULL,
+			operation_time INTEGER NOT NULL,
+			result DOUBLE PRECISION DEFAULT 0,
+			depends_on TEXT[] DEFAULT '{}',
 			status TEXT DEFAULT 'pending',
 			FOREIGN KEY (expression_id) REFERENCES expressions(id) ON DELETE CASCADE
 		);
@@ -38,7 +40,7 @@ func InitDB(db *sql.DB) {
 	if err != nil {
 		log.Fatalf("Ошибка при создании таблицы tasks: %v", err)
 	}
-	fmt.Println("Таблица tasks успешно создана или уже существует.")
+	log.Printf("Таблица tasks успешно создана или уже существует.")
 
 	// Пример: Создание таблицы для пользователей (если нужно)
 	createUsersTableQuery := `
@@ -52,5 +54,5 @@ func InitDB(db *sql.DB) {
 	if err != nil {
 		log.Fatalf("Ошибка при создании таблицы users: %v", err)
 	}
-	fmt.Println("Таблица users успешно создана или уже существует.")
+	log.Printf("Таблица users успешно создана или уже существует.")
 }

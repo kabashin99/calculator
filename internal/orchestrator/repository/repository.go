@@ -16,12 +16,10 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 // Создание выражения
-func (r *Repository) AddExpression(expression *models.Expression) error {
-	query := `
-		INSERT INTO expressions (id, user_id, status, result) 
-		VALUES ($1, $2, $3, $4)
-		`
-	_, err := r.db.Exec(query, expression.ID, expression.UserID, expression.Status, expression.Result)
+func (r *Repository) AddExpression(expr *models.Expression) error {
+	query := `INSERT INTO expressions (id, user_id, status, result)
+		VALUES ($1, $2, $3, $4)`
+	_, err := r.db.Exec(query, expr.ID, expr.UserID, expr.Status, expr.Result)
 	if err != nil {
 		log.Printf("Error inserting expression: %v", err)
 	}
@@ -67,7 +65,7 @@ func (r *Repository) GetExpressionsByUserID(userID string) ([]*models.Expression
 // Обновление результата выражения
 func (r *Repository) UpdateExpressionResult(id string, result float64) error {
 	query := `
-		UPDATE tasks
+		UPDATE expressions
 		SET result = $1, status = 'done'
 		WHERE id = $2
 	`
@@ -87,8 +85,8 @@ func (r *Repository) AddTask(task *models.Task) error {
 		task.ID,
 		task.ExpressionID,
 		task.Operation,
-		task.Arg1,
-		task.Arg2,
+		task.Operand1,
+		task.Operand2,
 		task.OperationTime,
 		task.Result,
 		pq.Array(task.DependsOn),
@@ -100,6 +98,8 @@ func (r *Repository) AddTask(task *models.Task) error {
 
 // Получение первой "свободной" задачи
 func (r *Repository) GetTask() (*models.Task, error) {
+	log.Println("[repository.go] GetTask called")
+
 	query := `
 		SELECT id, expression_id, operation, operand1, operand2, operation_time, result, depends_on, status
 		FROM tasks
@@ -117,8 +117,8 @@ func (r *Repository) GetTask() (*models.Task, error) {
 		&task.ID,
 		&task.ExpressionID,
 		&task.Operation,
-		&task.Arg1,
-		&task.Arg2,
+		&task.Operand1,
+		&task.Operand2,
 		&task.OperationTime,
 		&task.Result,
 		pq.Array(&dependsOn),
@@ -142,101 +142,17 @@ func (r *Repository) UpdateTaskResult(taskID string, result float64) error {
 	}
 
 	// Обновляем задачу
-	_, err = r.db.Exec(`UPDATE tasks SET status = 'done' WHERE id = $1`, taskID)
+	// _, err = r.db.Exec(`UPDATE tasks SET status = 'done' WHERE id = $1`, taskID)
+	_, err = r.db.Exec(`UPDATE tasks SET result = $1, status = 'done' WHERE id = $2`, result, taskID)
 	if err != nil {
 		return err
 	}
 
 	// Обновляем результат выражения
-	_, err = r.db.Exec(`UPDATE expressions SET status = 'done', result = $1 WHERE id = $2`, result, expressionID)
+	//_, err = r.db.Exec(`UPDATE expressions SET status = 'done', result = $1 WHERE id = $2`, result, expressionID)
 	return err
 }
 
-/*
-package repository
-
-import (
-	"calculator_app/internal/pkg/models"
-	"sync"
-)
-
-type Repository struct {
-	expressions map[string]*models.Expression
-	tasks       []*models.Task
-	users       map[string]*models.User
-	mu          sync.Mutex
+func (r *Repository) GetDB() *sql.DB {
+	return r.db
 }
-
-func NewRepository() *Repository {
-	return &Repository{
-		expressions: make(map[string]*models.Expression),
-		tasks:       make([]*models.Task, 0),
-		users:       make(map[string]*models.User),
-	}
-}
-
-func (r *Repository) AddExpression(expression *models.Expression) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.expressions[expression.ID] = expression
-}
-
-func (r *Repository) GetExpressions() map[string]*models.Expression {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.expressions
-}
-
-func (r *Repository) GetExpressionByID(id string) (*models.Expression, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	expr, exists := r.expressions[id]
-	return expr, exists
-}
-
-func (r *Repository) AddTask(task *models.Task) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.tasks = append(r.tasks, task)
-}
-
-func (r *Repository) GetTask() (*models.Task, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if len(r.tasks) == 0 {
-		return nil, false
-	}
-
-	task := r.tasks[0]
-	r.tasks = r.tasks[1:]
-	return task, true
-}
-
-func (r *Repository) UpdateExpressionResult(id string, result float64) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	expr, exists := r.expressions[id]
-	if !exists {
-		return false
-	}
-
-	expr.Result = result
-	expr.Status = "done"
-	return true
-}
-
-func (r *Repository) AddUser(user *models.User) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.users[user.ID] = user
-}
-
-func (r *Repository) GetUserByID(id string) (*models.User, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	user, exists := r.users[id]
-	return user, exists
-}
-*/

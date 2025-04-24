@@ -69,6 +69,8 @@ func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
+	log.Println("[handler.go] GetTask called")
+
 	task, err := h.repo.GetTask()
 	if err != nil {
 		http.Error(w, "Задачи не найдены или ошибка базы", http.StatusInternalServerError)
@@ -86,24 +88,47 @@ func (h *Handler) SubmitResult(w http.ResponseWriter, r *http.Request) {
 		Result float64 `json:"result"`
 	}
 
+	// Декодируем JSON
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
 		http.Error(w, "Некорректный формат JSON", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("📥 Получен результат: TaskID=%s, Result=%f", input.TaskID, input.Result)
+
+	// Сохраняем результат в БД
 	err = h.repo.UpdateTaskResult(input.TaskID, input.Result)
 	if err != nil {
 		http.Error(w, "Не удалось обновить результат задачи", http.StatusInternalServerError)
-		log.Printf("Ошибка при обновлении результата: %v", err)
+		log.Printf("❌ Ошибка при обновлении результата в БД: %v", err)
 		return
 	}
 
+	// Обновляем результат в памяти через orchestrator
+	ok := h.orchestrator.SubmitResult(input.TaskID, input.Result)
+	if !ok {
+		log.Printf("⚠️ Orchestrator отклонил результат: TaskID=%s", input.TaskID)
+		http.Error(w, "Ошибка при обновлении состояния оркестратора", http.StatusBadRequest)
+		return
+	}
+
+	// Ответ клиенту
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write([]byte(`{"status":"updated"}`))
 	if err != nil {
-		log.Printf("Ошибка при отправке ответа: %v", err)
+		log.Printf("⚠️ Ошибка при отправке ответа клиенту: %v", err)
 	}
+
+	// Асинхронно пробуем финализировать выражение
+	go func() {
+		log.Printf("📨 Запуск TryFinalizeExpression для taskID: %s", input.TaskID)
+		err := h.orchestrator.TryFinalizeExpression(input.TaskID)
+		if err != nil {
+			log.Printf("❌ Ошибка при попытке завершить выражение: %v", err)
+		}
+	}()
 }
 
 func (h *Handler) AddTask(w http.ResponseWriter, r *http.Request) {
