@@ -35,7 +35,7 @@ func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, ti
 	}
 }
 
-func (o *Orchestrator) AddExpression(expression string) (string, error) {
+func (o *Orchestrator) AddExpression(expression string, userLogin string) (string, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -44,11 +44,12 @@ func (o *Orchestrator) AddExpression(expression string) (string, error) {
 		ID:     id,
 		Status: "pending",
 		Result: 0,
+		Owner:  userLogin,
 	}
 
-	log.Printf("New expression added: ID=%s, Expression=%s", id, expression)
+	log.Printf("New expression added: User=%s, ID=%s, Expression=%s", userLogin, id, expression)
 
-	tasks, err := o.parseExpressionToTasks(expression, id)
+	tasks, err := o.parseExpressionToTasks(expression, id, userLogin)
 	if err != nil {
 		return "", err
 	}
@@ -56,13 +57,12 @@ func (o *Orchestrator) AddExpression(expression string) (string, error) {
 	o.tasks = append(o.tasks, tasks...)
 	log.Printf("Tasks created for expression ID=%s: %+v", id, tasks)
 
-	// Логируем все задачи после добавления
 	log.Printf("All tasks after adding expression: %+v", o.tasks)
 
 	return id, nil
 }
 
-func (o *Orchestrator) parseExpressionToTasks(expression, expressionID string) ([]*models.Task, error) {
+func (o *Orchestrator) parseExpressionToTasks(expression, expressionID, userLogin string) ([]*models.Task, error) {
 	postfix, err := shuntingYard(tokenize(expression))
 	if err != nil {
 		return nil, fmt.Errorf("shunting yard error: %v", err)
@@ -95,6 +95,7 @@ func (o *Orchestrator) parseExpressionToTasks(expression, expressionID string) (
 				ID:        taskID,
 				Operation: token,
 				DependsOn: []string{},
+				UserLogin: userLogin,
 			}
 
 			if strings.HasPrefix(left, "task:") {
