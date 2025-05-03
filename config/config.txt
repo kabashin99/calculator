@@ -6,3 +6,6 @@ TIME_DIVISION_MS=200
 
 # Конфигурация агента
 COMPUTING_POWER=4
+
+# Конфигурация JWT
+JWT_SECRET_KEY=JRFDGFDdfdse3dd34dg

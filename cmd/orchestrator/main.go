@@ -22,6 +22,8 @@ func main() {
 	http.HandleFunc("GET /api/v1/expressions/{id}", OrchHandler.GetExpressionByID)
 	http.HandleFunc("GET /internal/task", OrchHandler.GetTask)
 	http.HandleFunc("POST /internal/task", OrchHandler.SubmitResult)
+	http.HandleFunc("POST /api/v1/register", OrchHandler.RegisterUser)
+	http.HandleFunc("POST /api/v1/login", OrchHandler.LoginUser)
 
 	log.Println("Оркестратор запущен на :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
