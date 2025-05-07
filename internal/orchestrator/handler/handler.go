@@ -5,91 +5,64 @@ import (
 	"calculator_app/internal/pkg/models"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 const hmacSampleSecret = "super_secret_signature"
 
 type Handler struct {
-	orc   *service.Orchestrator
-	users map[string]models.User
+	orc *service.Orchestrator
 }
 
 func NewHandler(orc *service.Orchestrator) *Handler {
 	return &Handler{
-		orc:   orc,
-		users: make(map[string]models.User),
+		orc: orc,
 	}
-}
-
-func generateToken(userLogin string) string {
-	now := time.Now()
-	exp := now.Add(24 * time.Hour).Unix()
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"login": userLogin, // Добавляем логин в claims
-		"exp":   exp,
-		"iat":   now.Unix(), // Время создания токена
-	})
-
-	tokenString, err := token.SignedString([]byte(hmacSampleSecret))
-	if err != nil {
-		log.Printf("Failed to generate token")
-		return ""
-	}
-	return tokenString
 }
 
 func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	if _, exists := h.users[user.Login]; exists {
-		http.Error(w, "User alredy exists", http.StatusConflict)
+	if err := h.orc.RegisterUser(user); err != nil {
+		http.Error(w, "Registration failed: "+err.Error(), http.StatusConflict)
 		return
 	}
 
-	h.users[user.Login] = user
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "User registered successfully",
-	})
+	userSuccessfully := fmt.Sprintf("user '%s' created successfully", user)
+	json.NewEncoder(w).Encode(map[string]string{"status": userSuccessfully})
 }
 
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	var creds struct {
+		Login    string `json:"login"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	storedUSer, exists := h.users[user.Login]
-	if !exists || storedUSer.Password != user.Password {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	token, exp, err := h.orc.Authenticate(creds.Login, creds.Password)
+	if err != nil {
+		http.Error(w, "Authentication failed", http.StatusUnauthorized)
 		return
-	}
-
-	token := generateToken(user.Login)
-	now := time.Now()
-	exp := now.Add(24 * time.Hour).Unix()
-
-	expTime := time.Unix(exp, 0).Format("2006-01-02 15:04:05")
-	response := map[string]string{
-		"token": "Bearer " + token,
-		"exp":   expTime,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	//w.Header().Set("Authorization", "Bearer "+tokenString)
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":      token,
+		"expires_at": exp.Format(time.RFC3339), // формат ISO 8601
+	})
 }
 
 func (h *Handler) CheckAuthorization(r *http.Request) (string, error) {
@@ -126,7 +99,7 @@ func (h *Handler) CheckAuthorization(r *http.Request) (string, error) {
 func (h *Handler) authorize(w http.ResponseWriter, r *http.Request) (string, error) {
 	login, err := h.CheckAuthorization(r)
 	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		//http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return "", err
 	}
 	return login, nil
@@ -137,6 +110,16 @@ func (h *Handler) AddExpression(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error parsing token: %v", err)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	exists, err := h.orc.UserExists(login)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "User not found", http.StatusForbidden)
 		return
 	}
 
@@ -160,57 +143,74 @@ func (h *Handler) AddExpression(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetExpressions(w http.ResponseWriter, r *http.Request) {
 
-	login, err := h.authorize(w, r)
+	owner, err := h.authorize(w, r)
 	if err != nil {
 		return
 	}
 
-	exprMap := h.orc.GetExpressions()
+	exprMap, err := h.orc.GetExpressions(owner)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	//expressions := make([]models.Expression, 0, len(exprMap))
 	expressions := make([]models.Expression, 0)
 	for _, expr := range exprMap {
-		if expr.Owner == login {
+		if expr.Owner == owner {
 			expressions = append(expressions, *expr)
 		}
 	}
 
-	w.WriteHeader(http.StatusOK) //200
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"expressions": expressions,
 	})
 }
 
 func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
-	login, err := h.authorize(w, r)
+	owner, err := h.authorize(w, r)
 	if err != nil {
 		return
 	}
 
 	id := r.PathValue("id")
-	expr, exists := h.orc.GetExpressionByID(id)
+	expr, exists, err := h.orc.GetExpressionByID(id, owner)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if !exists {
 		http.Error(w, "expression not found", http.StatusNotFound) //404
 		return
 	}
 
-	if expr.Owner != login {
+	if expr.Owner != owner {
 		http.Error(w, "Unauthorized access", http.StatusUnauthorized) // 401
 		return
 	}
 
-	w.WriteHeader(http.StatusOK) // 200
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
-	task, exists := h.orc.GetTask()
+	//log.Println("Fetching available tasks from database...")
+	task, exists, err := h.orc.GetTask()
+	if err != nil {
+		log.Printf("Error fetching task: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if !exists {
+		// log.Println("No pending tasks found in database")
 		http.Error(w, "no tasks available", http.StatusNotFound) //404
 		return
 	}
 
-	w.WriteHeader(http.StatusOK) // 200
+	log.Printf("Returning task: ID=%s, Operation=%s", task.ID, task.Operation)
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"task": task})
 }
 
@@ -219,15 +219,41 @@ func (h *Handler) SubmitResult(w http.ResponseWriter, r *http.Request) {
 		ID     string  `json:"id"`
 		Result float64 `json:"result"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusUnprocessableEntity) // 422
+		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	if !h.orc.SubmitResult(req.ID, req.Result) {
-		http.Error(w, "task not found", http.StatusNotFound) // 404
+	success, err := h.orc.SubmitResult(req.ID, req.Result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK) // 200
+	if !success {
+		http.Error(w, "task not found or already completed", http.StatusConflict)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) GetTaskResult(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("id")
+
+	result, exists, err := h.orc.GetTaskResult(taskID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "result not ready", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]float64{
+		"result": result,
+	})
 }
