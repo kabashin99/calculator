@@ -30,14 +30,14 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Теперь используем репозиторий через сервис
 	if err := h.orc.RegisterUser(user); err != nil {
 		http.Error(w, "Registration failed: "+err.Error(), http.StatusConflict)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "user created successfully"})
+	userSuccessfully := fmt.Sprintf("user '%s' created successfully", user)
+	json.NewEncoder(w).Encode(map[string]string{"status": userSuccessfully})
 }
 
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
@@ -50,18 +50,6 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-
-	/*
-		token := generateToken(user.Login)
-		now := time.Now()
-		exp := now.Add(24 * time.Hour).Unix()
-
-		expTime := time.Unix(exp, 0).Format("2006-01-02 15:04:05")
-		response := map[string]string{
-			"token": "Bearer " + token,
-			"exp":   expTime,
-		}
-	*/
 
 	token, exp, err := h.orc.Authenticate(creds.Login, creds.Password)
 	if err != nil {
@@ -207,7 +195,7 @@ func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
-	log.Println("Fetching available tasks from database...")
+	//log.Println("Fetching available tasks from database...")
 	task, exists, err := h.orc.GetTask()
 	if err != nil {
 		log.Printf("Error fetching task: %v", err)
@@ -216,7 +204,7 @@ func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !exists {
-		log.Println("No pending tasks found in database")
+		// log.Println("No pending tasks found in database")
 		http.Error(w, "no tasks available", http.StatusNotFound) //404
 		return
 	}

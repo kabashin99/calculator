@@ -42,7 +42,6 @@ func (a *Agent) worker() {
 			continue
 		}
 
-		// Проверяем зависимости
 		for _, depID := range task.DependsOn {
 			for attempt := 0; attempt < 10; attempt++ {
 				result, err := a.getDependencyResult(depID)

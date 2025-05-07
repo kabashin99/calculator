@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -37,42 +36,6 @@ func (r *Repository) AddExpression(expr *models.Expression) error {
 	return err
 }
 
-func (r *Repository) GetExpressions() (map[string]*models.Expression, error) {
-	rows, err := r.db.Query(`SELECT id, status, result, owner FROM expressions`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	expressions := make(map[string]*models.Expression)
-	for rows.Next() {
-		var expr models.Expression
-		if err := rows.Scan(&expr.ID, &expr.Status, &expr.Result, &expr.Owner); err != nil {
-			return nil, err
-		}
-		expressions[expr.ID] = &expr
-	}
-
-	return expressions, nil
-}
-
-func (r *Repository) GetExpressionByID(id string) (*models.Expression, bool, error) {
-	var expr models.Expression
-	err := r.db.QueryRow(
-		`SELECT id, status, result, owner FROM expressions WHERE id = ?`,
-		id,
-	).Scan(&expr.ID, &expr.Status, &expr.Result, &expr.Owner)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-
-	return &expr, true, nil
-}
-
 func (r *Repository) AddTask(task *models.Task) error {
 	var result interface{} = nil
 	if task.Result != nil {
@@ -89,39 +52,10 @@ func (r *Repository) AddTask(task *models.Task) error {
 		result, dependsOn, task.UserLogin,
 	)
 	if task.Status == "" {
-		task.Status = TaskStatusPending // Принудительная установка
+		task.Status = TaskStatusPending
 	}
 
 	return err
-}
-
-func (r *Repository) GetTask() (*models.Task, bool, error) {
-	var task models.Task
-	var dependsOnStr string
-
-	err := r.db.QueryRow(
-		`SELECT id, arg1, arg2, operation, operation_time, result, depends_on, user_login 
-		 FROM tasks 
-		 WHERE (result IS NULL OR result = 0)
-		 LIMIT 1`,
-	).Scan(
-		&task.ID, &task.Arg1, &task.Arg2, &task.Operation,
-		&task.OperationTime, &task.Result, &dependsOnStr, &task.UserLogin,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Конвертируем depends_on обратно в массив
-	if dependsOnStr != "" {
-		task.DependsOn = strings.Split(dependsOnStr, ",")
-	}
-
-	return &task, true, nil
 }
 
 func (r *Repository) RegisterUser(user models.User) error {
@@ -200,7 +134,7 @@ func (r *Repository) GetExpressionByIDAndOwner(id string, owner string) (*models
 }
 
 func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
-	log.Println("Executing GetAndLockTask query...")
+	// log.Println("Executing GetAndLockTask query...")
 
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -212,7 +146,6 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 	var dependsOnStr string
 	var result sql.NullFloat64
 
-	// 1. Находим задачу со статусом "pending"
 	err = tx.QueryRow(`
 		SELECT id, arg1, arg2, operation, operation_time, depends_on, user_login, result
 		FROM tasks 
@@ -244,7 +177,7 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
         SET status = ?, 
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ? 
-          AND status = ?`, // Важно проверять исходный статус
+          AND status = ?`,
 		TaskStatusProcessing, task.ID, TaskStatusPending)
 	if err != nil {
 		return nil, false, fmt.Errorf("update error: %w", err)
@@ -255,22 +188,18 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 		return nil, false, fmt.Errorf("rows affected error: %w", err)
 	}
 
-	// Если не удалось обновить (задача уже взята другим агентом)
 	if rowsAffected == 0 {
 		return nil, false, nil
 	}
 
-	// 3. Если дошли сюда - коммитим транзакцию
 	if err := tx.Commit(); err != nil {
 		return nil, false, fmt.Errorf("commit error: %w", err)
 	}
 
-	// 4. Обрабатываем зависимости, если они есть
 	if dependsOnStr != "" {
 		task.DependsOn = strings.Split(dependsOnStr, ",")
 	}
 
-	// Устанавливаем статус в объекте задачи
 	task.Status = TaskStatusProcessing
 
 	return &task, true, nil
@@ -314,10 +243,20 @@ func (r *Repository) AreAllTasksCompleted(exprID string) (bool, error) {
 func (r *Repository) CalculateFinalResult(exprID string) (float64, error) {
 	var result float64
 	err := r.db.QueryRow(
-		`SELECT result FROM tasks 
-         WHERE id LIKE ? || '-%' 
-         ORDER BY LENGTH(depends_on) DESC LIMIT 1`,
-		exprID,
+		`
+        SELECT t.result
+        FROM tasks AS t
+        WHERE t.id LIKE ? || '-%'
+          AND t.status = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM tasks AS t2
+              WHERE t2.id LIKE ? || '-%'
+                AND t2.depends_on LIKE '%' || t.id || '%'
+          )
+        ORDER BY LENGTH(t.depends_on) DESC
+        LIMIT 1;`,
+		exprID, TaskStatusCompleted, exprID,
 	).Scan(&result)
 
 	return result, err
@@ -325,9 +264,12 @@ func (r *Repository) CalculateFinalResult(exprID string) (float64, error) {
 
 func (r *Repository) UpdateExpression(exprID string, result float64) (bool, error) {
 	res, err := r.db.Exec(
-		`UPDATE expressions SET status = ?, result = ? WHERE id = ?`,
+		`UPDATE expressions 
+			   SET status = ?, result = ? 
+			   WHERE id = ?`,
 		ExprStatusDone, result, exprID,
 	)
+
 	if err != nil {
 		return false, fmt.Errorf("failed to execute update: %w", err)
 	}

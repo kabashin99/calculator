@@ -17,7 +17,7 @@ import (
 const hmacSampleSecret = "super_secret_signature"
 
 type Orchestrator struct {
-	repo                 *repository.Repository // Используем репозиторий с БД
+	repo                 *repository.Repository
 	timeAdditionMS       int
 	timeSubtractionMS    int
 	timeMultiplicationMS int
@@ -40,7 +40,7 @@ func (o *Orchestrator) AddExpression(expression string, owner string) (string, e
 		ID:     id,
 		Status: "pending",
 		Result: nil,
-		Owner:  owner, // Замените на реального пользователя
+		Owner:  owner,
 	})
 
 	if err != nil {
@@ -236,7 +236,7 @@ func (o *Orchestrator) GetExpressionByID(id string, owner string) (*models.Expre
 }
 
 func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
-	log.Println("Getting task from repository...")
+	// log.Println("Getting task from repository...")
 	task, exists, err := o.repo.GetAndLockTask()
 	if err != nil {
 		log.Printf("Repository error: %v", err)
@@ -244,7 +244,7 @@ func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
 	}
 
 	if !exists {
-		log.Println("No tasks available in repository")
+		//log.Println("No tasks available in repository")
 	} else {
 		log.Printf("Found task: %+v", task)
 	}
@@ -253,7 +253,6 @@ func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
 }
 
 func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error) {
-	// 1. Обновляем результат задачи
 	updated, err := o.repo.UpdateTaskResult(taskID, result)
 	if err != nil {
 		return false, fmt.Errorf("failed to update task: %w", err)
@@ -262,32 +261,32 @@ func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error)
 		return false, nil
 	}
 
-	// 2. Получаем ID выражения из ID задачи
-	exprID := strings.Split(taskID, "-")[0]
+	parts := strings.Split(taskID, "-")
+	if len(parts) < 6 {
+		return false, fmt.Errorf("invalid taskID format: %s", taskID)
+	}
+	exprID := strings.Join(parts[:5], "-")
 
-	// 3. Проверяем все ли задачи выражения выполнены
 	allDone, err := o.repo.AreAllTasksCompleted(exprID)
 	if err != nil {
 		return false, fmt.Errorf("failed to check tasks: %w", err)
 	}
 
-	// 4. Если не все задачи выполнены - возвращаем успех
 	if !allDone {
 		return true, nil
 	}
 
-	// 5. Вычисляем финальный результат
 	finalResult, err := o.repo.CalculateFinalResult(exprID)
 	if err != nil {
 		return false, fmt.Errorf("failed to calculate result: %w", err)
 	}
 
-	// 6. Обновляем выражение
 	exprUpdated, err := o.repo.UpdateExpression(exprID, finalResult)
 	if err != nil {
 		return false, fmt.Errorf("failed to update expression: %w", err)
 	}
 	if !exprUpdated {
+		log.Printf("Failed to update expression with ID %s", exprID)
 		return false, fmt.Errorf("expression not found or not updated")
 	}
 
@@ -341,12 +340,10 @@ func tokenize(expression string) []string {
 }
 
 func (o *Orchestrator) RegisterUser(user models.User) error {
-	// Используем репозиторий для сохранения пользователя
 	return o.repo.RegisterUser(user)
 }
 
 func (o *Orchestrator) Authenticate(login, password string) (string, time.Time, error) {
-	// 1. Находим пользователя в БД
 	user, err := o.repo.FindUser(login)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("user not found")
@@ -383,9 +380,9 @@ func generateToken(userLogin string) (string, time.Time, error) {
 	exp := now.Add(24 * time.Hour)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"login": userLogin, // Добавляем логин в claims
+		"login": userLogin,
 		"exp":   exp.Unix(),
-		"iat":   now.Unix(), // Время создания токена
+		"iat":   now.Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(hmacSampleSecret))

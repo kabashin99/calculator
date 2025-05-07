@@ -19,7 +19,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	os.MkdirAll("data", os.ModePerm)
+	os.MkdirAll("db", os.ModePerm)
 	connStr := "file:db/calculator.db?cache=shared&mode=rwc"
 	dbConn, err := sql.Open("sqlite", connStr)
 	if err != nil {

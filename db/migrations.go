@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 func RunMigrations(db *sql.DB) error {
@@ -39,12 +41,23 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	for _, stmt := range statements {
-		fmt.Println("Running statement:\n", stmt)
+		tableName := extractTableName(stmt)
+		fmt.Printf("Migrating table: %s\n", tableName)
+
 		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration failed: %w", err)
+			return fmt.Errorf("migration failed for table %s: %w", tableName, err)
 		}
 	}
 
 	fmt.Println("DB migrations completed")
 	return nil
+}
+
+func extractTableName(stmt string) string {
+	re := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)`)
+	matches := re.FindStringSubmatch(stmt)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	return "unknown"
 }
