@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 type Agent struct {
 	orchestratorURL string
 	computingPower  int
+	db              *sql.DB
 }
 
 func NewAgent(orchestratorURL string, computingPower int) *Agent {
@@ -24,15 +26,14 @@ func NewAgent(orchestratorURL string, computingPower int) *Agent {
 }
 
 func (a *Agent) Start() {
-	results := make(map[string]float64)
 	log.Printf("Agent started with %d workers", a.computingPower)
 
 	for i := 0; i < a.computingPower; i++ {
-		go a.worker(results)
+		go a.worker()
 	}
 }
 
-func (a *Agent) worker(results map[string]float64) {
+func (a *Agent) worker() {
 	for {
 		task, err := a.fetchTask()
 		if err != nil {
@@ -41,37 +42,69 @@ func (a *Agent) worker(results map[string]float64) {
 			continue
 		}
 
-		log.Printf("Task received: %+v", task)
-
+		// Проверяем зависимости
 		for _, depID := range task.DependsOn {
-			for {
-				if result, ok := results[depID]; ok {
+			for attempt := 0; attempt < 10; attempt++ {
+				result, err := a.getDependencyResult(depID)
+				if err == nil {
 					if task.Arg1 == 0 {
 						task.Arg1 = result
 					} else {
 						task.Arg2 = result
 					}
-					log.Printf("Updated task %s with dependency %s: Arg1=%f, Arg2=%f",
-						task.ID, depID, task.Arg1, task.Arg2)
 					break
 				}
-				time.Sleep(50 * time.Millisecond)
+
+				if attempt == 9 {
+					log.Printf("Dependency %s not ready after 10 attempts", depID)
+					continue
+				}
+				time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
 			}
 		}
 
 		result := a.executeTask(task)
-		results[task.ID] = result
 
-		log.Printf("Task result: %f", result)
-
-		for retry := 0; retry < 3; retry++ {
-			if err := a.submitResult(task.ID, result); err == nil {
-				break
-			}
-			log.Printf("Retry %d: Failed to submit result for task %s", retry+1, task.ID)
-			time.Sleep(1 * time.Second)
+		if err := a.submitWithRetry(task.ID, result, 3); err != nil {
+			log.Printf("Failed to submit result for task %s: %v", task.ID, err)
 		}
 	}
+}
+
+func (a *Agent) waitForDependencies(task *models.Task) error {
+	for _, depID := range task.DependsOn {
+		for attempt := 0; attempt < 10; attempt++ {
+			result, err := a.getDependencyResult(depID)
+			if err == nil {
+				if task.Arg1 == 0 {
+					task.Arg1 = result
+				} else {
+					task.Arg2 = result
+				}
+				break
+			}
+
+			if attempt == 9 {
+				return fmt.Errorf("dependency %s not ready after 10 attempts", depID)
+			}
+
+			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+func (a *Agent) submitWithRetry(taskID string, result float64, maxRetries int) error {
+	var lastErr error
+	for i := 0; i < maxRetries; i++ {
+		err := a.submitResult(taskID, result)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		time.Sleep(time.Second * time.Duration(i+1))
+	}
+	return fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
 }
 
 func (a *Agent) fetchTask() (*models.Task, error) {
@@ -90,6 +123,10 @@ func (a *Agent) fetchTask() (*models.Task, error) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failed to decode task: %v", err)
+	}
+
+	if response.Task == nil {
+		return nil, fmt.Errorf("empty task response")
 	}
 
 	return response.Task, nil
@@ -142,4 +179,25 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 
 	log.Printf("Result submitted successfully: Task ID=%s", taskID) // ✅ Лог
 	return nil
+}
+
+func (a *Agent) getDependencyResult(taskID string) (float64, error) {
+	resp, err := http.Get(a.orchestratorURL + "/internal/task/" + taskID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch dependency: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("dependency not ready")
+	}
+
+	var response struct {
+		Result float64 `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return 0, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return response.Result, nil
 }

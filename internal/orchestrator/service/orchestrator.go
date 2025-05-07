@@ -1,33 +1,32 @@
 package service
 
 import (
+	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/pkg/models"
+	"database/sql"
+	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"log"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/google/uuid"
+	"time"
 )
 
-type Orchestrator struct {
-	expressions    map[string]*models.Expression
-	tasks          []*models.Task
-	completedTasks map[string]*models.Task
-	mu             sync.Mutex
+const hmacSampleSecret = "super_secret_signature"
 
+type Orchestrator struct {
+	repo                 *repository.Repository // Используем репозиторий с БД
 	timeAdditionMS       int
 	timeSubtractionMS    int
 	timeMultiplicationMS int
 	timeDivisionMS       int
 }
 
-func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int) *Orchestrator {
+func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo *repository.Repository) *Orchestrator {
 	return &Orchestrator{
-		expressions:          make(map[string]*models.Expression),
-		tasks:                make([]*models.Task, 0),
-		completedTasks:       make(map[string]*models.Task),
+		repo:                 repo,
 		timeAdditionMS:       timeAdditionMS,
 		timeSubtractionMS:    timeSubtractionMS,
 		timeMultiplicationMS: timeMultiplicationMS,
@@ -35,34 +34,41 @@ func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, ti
 	}
 }
 
-func (o *Orchestrator) AddExpression(expression string, userLogin string) (string, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
+func (o *Orchestrator) AddExpression(expression string, owner string) (string, error) {
 	id := generateUUID()
-	o.expressions[id] = &models.Expression{
+	err := o.repo.AddExpression(&models.Expression{
 		ID:     id,
 		Status: "pending",
-		Result: 0,
-		Owner:  userLogin,
+		Result: nil,
+		Owner:  owner, // Замените на реального пользователя
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to save expression: %w", err)
 	}
 
-	log.Printf("New expression added: User=%s, ID=%s, Expression=%s", userLogin, id, expression)
-
-	tasks, err := o.parseExpressionToTasks(expression, id, userLogin)
+	tasks, err := o.parseExpressionToTasks(expression, id, owner)
 	if err != nil {
 		return "", err
 	}
 
-	o.tasks = append(o.tasks, tasks...)
-	log.Printf("Tasks created for expression ID=%s: %+v", id, tasks)
-
-	log.Printf("All tasks after adding expression: %+v", o.tasks)
+	for _, task := range tasks {
+		task.UserLogin = owner
+		if err := o.repo.AddTask(task); err != nil {
+			return "", fmt.Errorf("failed to add task: %w", err)
+		}
+	}
 
 	return id, nil
 }
 
-func (o *Orchestrator) parseExpressionToTasks(expression, expressionID, userLogin string) ([]*models.Task, error) {
+func (o *Orchestrator) parseExpressionToTasks(
+	expression string,
+	expressionID string,
+	owner string,
+
+) ([]*models.Task, error) {
+
 	postfix, err := shuntingYard(tokenize(expression))
 	if err != nil {
 		return nil, fmt.Errorf("shunting yard error: %v", err)
@@ -95,7 +101,7 @@ func (o *Orchestrator) parseExpressionToTasks(expression, expressionID, userLogi
 				ID:        taskID,
 				Operation: token,
 				DependsOn: []string{},
-				UserLogin: userLogin,
+				UserLogin: owner,
 			}
 
 			if strings.HasPrefix(left, "task:") {
@@ -221,114 +227,71 @@ func isOperator(token string) bool {
 	return token == "+" || token == "-" || token == "*" || token == "/"
 }
 
-func (o *Orchestrator) GetExpressions() map[string]*models.Expression {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.expressions
+func (o *Orchestrator) GetExpressions(owner string) (map[string]*models.Expression, error) {
+	return o.repo.GetExpressionsByOwner(owner)
 }
 
-func (o *Orchestrator) GetExpressionByID(id string) (*models.Expression, bool) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	expr, exists := o.expressions[id]
-	return expr, exists
+func (o *Orchestrator) GetExpressionByID(id string, owner string) (*models.Expression, bool, error) {
+	return o.repo.GetExpressionByIDAndOwner(id, owner)
 }
 
-func (o *Orchestrator) GetTask() (*models.Task, bool) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	log.Println("GetTask called. Checking available tasks...")
-
-	if len(o.tasks) == 0 {
-		log.Println("No tasks available")
-		return nil, false
+func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
+	log.Println("Getting task from repository...")
+	task, exists, err := o.repo.GetAndLockTask()
+	if err != nil {
+		log.Printf("Repository error: %v", err)
+		return nil, false, err
 	}
 
-	task := o.tasks[0]
-	o.tasks = o.tasks[1:]
-
-	log.Printf("Task to be dispatched: %+v", task)
-
-	taskCopy := *task
-	if o.completedTasks == nil {
-		o.completedTasks = make(map[string]*models.Task)
-	}
-	o.completedTasks[taskCopy.ID] = &taskCopy
-
-	log.Printf("Task dispatched: %+v", taskCopy)
-	return &taskCopy, true
-}
-
-func (o *Orchestrator) SubmitResult(taskID string, result float64) bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	log.Printf("Received result submission: Task ID=%s, Result=%f", taskID, result)
-
-	log.Printf("Current expressions: %+v", o.expressions)
-	log.Printf("Current completed tasks: %+v", o.completedTasks)
-
-	parts := strings.Split(taskID, "-")
-	if len(parts) < 5 {
-		log.Printf("Invalid task ID: %s", taskID)
-		return false
-	}
-	expressionID := strings.Join(parts[:5], "-")
-
-	log.Printf("Extracted expression ID: %s from task ID: %s", expressionID, taskID)
-
-	expr, exists := o.expressions[expressionID]
 	if !exists {
-		log.Printf("Expression not found for task ID: %s", taskID)
-		return false
-	}
-
-	if task, ok := o.completedTasks[taskID]; ok {
-		task.Result = result
-		log.Printf("Task updated: ID=%s, Result=%f", taskID, result)
+		log.Println("No tasks available in repository")
 	} else {
-		log.Printf("Task not found in completedTasks: %s", taskID)
-		return false
+		log.Printf("Found task: %+v", task)
 	}
 
-	allTasksDone := true
-	var finalResult float64
+	return task, exists, nil
+}
 
-	for id, task := range o.completedTasks {
-		if strings.HasPrefix(id, expressionID) {
-			if task.Result == 0 {
-				allTasksDone = false
-				break
-			}
-
-			isFinalTask := true
-			for _, t := range o.completedTasks {
-				for _, dep := range t.DependsOn {
-					if dep == id {
-						isFinalTask = false
-						break
-					}
-				}
-				if !isFinalTask {
-					break
-				}
-			}
-
-			if isFinalTask {
-				finalResult = task.Result
-			}
-		}
+func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error) {
+	// 1. Обновляем результат задачи
+	updated, err := o.repo.UpdateTaskResult(taskID, result)
+	if err != nil {
+		return false, fmt.Errorf("failed to update task: %w", err)
+	}
+	if !updated {
+		return false, nil
 	}
 
-	if allTasksDone {
-		expr.Result = finalResult
-		expr.Status = "done"
-		log.Printf("Expression completed: ID=%s, Result=%f, Status=%s",
-			expressionID, finalResult, expr.Status)
+	// 2. Получаем ID выражения из ID задачи
+	exprID := strings.Split(taskID, "-")[0]
+
+	// 3. Проверяем все ли задачи выражения выполнены
+	allDone, err := o.repo.AreAllTasksCompleted(exprID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check tasks: %w", err)
 	}
 
-	return true
+	// 4. Если не все задачи выполнены - возвращаем успех
+	if !allDone {
+		return true, nil
+	}
+
+	// 5. Вычисляем финальный результат
+	finalResult, err := o.repo.CalculateFinalResult(exprID)
+	if err != nil {
+		return false, fmt.Errorf("failed to calculate result: %w", err)
+	}
+
+	// 6. Обновляем выражение
+	exprUpdated, err := o.repo.UpdateExpression(exprID, finalResult)
+	if err != nil {
+		return false, fmt.Errorf("failed to update expression: %w", err)
+	}
+	if !exprUpdated {
+		return false, fmt.Errorf("expression not found or not updated")
+	}
+
+	return true, nil
 }
 
 func generateUUID() string {
@@ -375,4 +338,60 @@ func tokenize(expression string) []string {
 	}
 
 	return tokens
+}
+
+func (o *Orchestrator) RegisterUser(user models.User) error {
+	// Используем репозиторий для сохранения пользователя
+	return o.repo.RegisterUser(user)
+}
+
+func (o *Orchestrator) Authenticate(login, password string) (string, time.Time, error) {
+	// 1. Находим пользователя в БД
+	user, err := o.repo.FindUser(login)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("user not found")
+	}
+
+	if user.Password != password {
+		return "", time.Time{}, fmt.Errorf("invalid credentials")
+	}
+
+	tokenString, exp, err := generateToken(login)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return tokenString, exp, nil
+}
+
+func (o *Orchestrator) UserExists(login string) (bool, error) {
+	_, err := o.repo.FindUser(login)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (o *Orchestrator) GetTaskResult(taskID string) (float64, bool, error) {
+	return o.repo.GetTaskResult(taskID)
+}
+
+func generateToken(userLogin string) (string, time.Time, error) {
+	now := time.Now()
+	exp := now.Add(24 * time.Hour)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"login": userLogin, // Добавляем логин в claims
+		"exp":   exp.Unix(),
+		"iat":   now.Unix(), // Время создания токена
+	})
+
+	tokenString, err := token.SignedString([]byte(hmacSampleSecret))
+	if err != nil {
+		log.Printf("Failed to generate token")
+		return "", time.Time{}, fmt.Errorf("failed to generate token: %w", err)
+	}
+	return tokenString, exp, nil
 }
