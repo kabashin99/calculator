@@ -1,6 +1,7 @@
 package service
 
 import (
+	"calculator_app/internal/config"
 	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/pkg/models"
 	"database/sql"
@@ -8,13 +9,12 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"strconv"
 	"strings"
 	"time"
 )
-
-const hmacSampleSecret = "super_secret_signature"
 
 type Orchestrator struct {
 	repo                 *repository.Repository
@@ -340,6 +340,11 @@ func tokenize(expression string) []string {
 }
 
 func (o *Orchestrator) RegisterUser(user models.User) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	user.Password = string(hashedPassword)
 	return o.repo.RegisterUser(user)
 }
 
@@ -349,7 +354,7 @@ func (o *Orchestrator) Authenticate(login, password string) (string, time.Time, 
 		return "", time.Time{}, fmt.Errorf("user not found")
 	}
 
-	if user.Password != password {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return "", time.Time{}, fmt.Errorf("invalid credentials")
 	}
 
@@ -385,7 +390,12 @@ func generateToken(userLogin string) (string, time.Time, error) {
 		"iat":   now.Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(hmacSampleSecret))
+	cfg, err := config.LoadConfig("calculator/config/config.txt")
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+
+	tokenString, err := token.SignedString([]byte(cfg.JwtSecretKey))
 	if err != nil {
 		log.Printf("Failed to generate token")
 		return "", time.Time{}, fmt.Errorf("failed to generate token: %w", err)

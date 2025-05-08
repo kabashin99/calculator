@@ -111,7 +111,11 @@ func (a *Agent) fetchTask() (*models.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch task: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("Warning: failed to close response body: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("no tasks available, status code: %d", resp.StatusCode)
@@ -170,7 +174,11 @@ func (a *Agent) submitResult(taskID string, result float64) error {
 	if err != nil {
 		return fmt.Errorf("failed to submit result: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("Warning: failed to close response body: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to submit result: status %d", resp.StatusCode)
@@ -185,7 +193,11 @@ func (a *Agent) getDependencyResult(taskID string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch dependency: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("Warning: failed to close response body: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("dependency not ready")

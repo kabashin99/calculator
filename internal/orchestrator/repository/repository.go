@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -104,7 +105,11 @@ func (r *Repository) GetExpressionsByOwner(owner string) (map[string]*models.Exp
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			log.Printf("Warning: failed to close rows: %v", cerr)
+		}
+	}()
 
 	expressions := make(map[string]*models.Expression)
 	for rows.Next() {
@@ -140,7 +145,11 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rErr := tx.Rollback(); rErr != nil && !errors.Is(rErr, sql.ErrTxDone) {
+			log.Printf("Warning: transaction rollback failed: %v", rErr)
+		}
+	}()
 
 	var task models.Task
 	var dependsOnStr string
@@ -159,7 +168,6 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		tx.Rollback()
 		return nil, false, nil
 	}
 	if err != nil {
@@ -201,7 +209,6 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 	}
 
 	task.Status = TaskStatusProcessing
-
 	return &task, true, nil
 }
 
