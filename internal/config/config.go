@@ -6,4 +6,5 @@ type Config struct {
 	TimeMultiplicationMS int
 	TimeDivisionMS       int
 	ComputingPower       int
+	JwtSecretKey         string
 }

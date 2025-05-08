@@ -19,13 +19,31 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	os.MkdirAll("db", os.ModePerm)
+	if err := os.MkdirAll("db", os.ModePerm); err != nil {
+		log.Fatalf("Failed to create db directory: %v", err)
+	}
+
 	connStr := "file:db/calculator.db?cache=shared&mode=rwc"
 	dbConn, err := sql.Open("sqlite", connStr)
 	if err != nil {
 		log.Fatalf("Could not connect to DB: %v", err)
 	}
-	defer dbConn.Close()
+
+	defer func() {
+		if err := dbConn.Close(); err != nil {
+			log.Printf("Warning: failed to close DB: %v", err)
+		}
+	}()
+
+	_, err = dbConn.Exec("PRAGMA journal_mode=WAL;")
+	if err != nil {
+		log.Fatalf("Failed to set WAL mode: %v", err)
+	}
+
+	_, err = dbConn.Exec("PRAGMA busy_timeout = 5000;") // 5 секунд
+	if err != nil {
+		log.Fatalf("Failed to set busy_timeout: %v", err)
+	}
 
 	if err := dbConn.Ping(); err != nil {
 		log.Fatalf("DB Ping failed: %v", err)

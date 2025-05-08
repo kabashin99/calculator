@@ -15,6 +15,7 @@ const (
 	defaultTimeMultiplicationMS = 200
 	defaultTimeDivisionMS       = 200
 	defaultComputingPower       = 4
+	defaultJwtSecretKey         = ""
 )
 
 func LoadConfig(path string) (*Config, error) {
@@ -24,6 +25,7 @@ func LoadConfig(path string) (*Config, error) {
 		TimeMultiplicationMS: defaultTimeMultiplicationMS,
 		TimeDivisionMS:       defaultTimeDivisionMS,
 		ComputingPower:       defaultComputingPower,
+		JwtSecretKey:         defaultJwtSecretKey,
 	}
 
 	file, err := os.Open(path)
@@ -31,7 +33,11 @@ func LoadConfig(path string) (*Config, error) {
 		log.Printf("Config file not found, using default values: %v\n", cfg)
 		return cfg, nil
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			log.Printf("Warning: failed to close config file: %v", cerr)
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -69,6 +75,8 @@ func LoadConfig(path string) (*Config, error) {
 			if v, err := strconv.Atoi(value); err == nil {
 				cfg.ComputingPower = v
 			}
+		case "JWT_SECRET_KEY":
+			cfg.JwtSecretKey = value
 		}
 	}
 

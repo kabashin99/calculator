@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"calculator_app/internal/config"
 	"calculator_app/internal/orchestrator/service"
 	"calculator_app/internal/pkg/models"
 	"encoding/json"
@@ -10,8 +11,6 @@ import (
 	"net/http"
 	"time"
 )
-
-const hmacSampleSecret = "super_secret_signature"
 
 type Handler struct {
 	orc *service.Orchestrator
@@ -36,7 +35,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	userSuccessfully := fmt.Sprintf("user '%s' created successfully", user)
+	userSuccessfully := fmt.Sprintf("user '%s' created successfully", user.Login)
 	json.NewEncoder(w).Encode(map[string]string{"status": userSuccessfully})
 }
 
@@ -61,7 +60,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token":      token,
-		"expires_at": exp.Format(time.RFC3339), // формат ISO 8601
+		"expires_at": exp.Format(time.RFC3339),
 	})
 }
 
@@ -71,12 +70,17 @@ func (h *Handler) CheckAuthorization(r *http.Request) (string, error) {
 		return "", fmt.Errorf("authorization header is missing")
 	}
 
+	cfg, err := config.LoadConfig("calculator/config/config.txt")
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+
 	tokenString := authHeader[len("Bearer "):]
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method")
 		}
-		return []byte(hmacSampleSecret), nil
+		return []byte(cfg.JwtSecretKey), nil
 	})
 
 	if err != nil || !token.Valid {
@@ -191,7 +195,10 @@ func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
