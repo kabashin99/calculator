@@ -248,6 +248,7 @@ func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
 	} else {
 		log.Printf("Found task: %+v", task)
 	}
+	//log.Printf("оркестратор отдает таску %+v", task)
 
 	return task, exists, nil
 }
@@ -390,7 +391,7 @@ func generateToken(userLogin string) (string, time.Time, error) {
 		"iat":   now.Unix(),
 	})
 
-	cfg, err := config.LoadConfig("calculator/config/config.txt")
+	cfg, err := config.LoadConfig("config/config.txt")
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}

@@ -3,12 +3,16 @@ package main
 import (
 	"calculator_app/db"
 	"calculator_app/internal/config"
+	grpcservice "calculator_app/internal/orchestrator/grpc"
 	"calculator_app/internal/orchestrator/handler"
 	"calculator_app/internal/orchestrator/repository"
 	"calculator_app/internal/orchestrator/service"
+	pb "calculator_app/internal/proto"
 	"database/sql"
+	"google.golang.org/grpc"
 	"log"
 	_ "modernc.org/sqlite"
+	"net"
 	"net/http"
 	"os"
 )
@@ -63,10 +67,26 @@ func main() {
 	http.HandleFunc("GET /api/v1/expressions", OrchHandler.GetExpressions)
 	http.HandleFunc("GET /api/v1/expressions/{id}", OrchHandler.GetExpressionByID)
 
-	http.HandleFunc("GET /internal/task", OrchHandler.GetTask)
-	http.HandleFunc("POST /internal/task", OrchHandler.SubmitResult)
-	http.HandleFunc("GET /internal/task/{id}", OrchHandler.GetTaskResult)
+	/*
+		http.HandleFunc("GET /internal/task", OrchHandler.GetTask)
+		http.HandleFunc("POST /internal/task", OrchHandler.SubmitResult)
+		http.HandleFunc("GET /internal/task/{id}", OrchHandler.GetTaskResult)
+	*/
 
-	log.Println("Оркестратор запущен на localhost:8080")
+	go func() {
+		lis, err := net.Listen("tcp", ":50051")
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		s := grpc.NewServer()
+		pb.RegisterOrchestratorServiceServer(s, grpcservice.NewOrchestratorGRPCServer(orc))
+
+		log.Println("gRPC сервер запущен на порту 50051")
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	log.Println("HTTP сервер запущен на localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
