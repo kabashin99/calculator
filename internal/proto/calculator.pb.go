@@ -154,9 +154,13 @@ func (x *GetTaskResponse) GetUserLogin() string {
 
 // Запрос на отправку результата
 type SubmitResultRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	Result        float32                `protobuf:"fixed32,2,opt,name=result,proto3" json:"result,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	TaskId string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	// Types that are valid to be assigned to Outcome:
+	//
+	//	*SubmitResultRequest_Result
+	//	*SubmitResultRequest_Error
+	Outcome       isSubmitResultRequest_Outcome `protobuf_oneof:"outcome"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -198,12 +202,46 @@ func (x *SubmitResultRequest) GetTaskId() string {
 	return ""
 }
 
-func (x *SubmitResultRequest) GetResult() float32 {
+func (x *SubmitResultRequest) GetOutcome() isSubmitResultRequest_Outcome {
 	if x != nil {
-		return x.Result
+		return x.Outcome
+	}
+	return nil
+}
+
+func (x *SubmitResultRequest) GetResult() float64 {
+	if x != nil {
+		if x, ok := x.Outcome.(*SubmitResultRequest_Result); ok {
+			return x.Result
+		}
 	}
 	return 0
 }
+
+func (x *SubmitResultRequest) GetError() string {
+	if x != nil {
+		if x, ok := x.Outcome.(*SubmitResultRequest_Error); ok {
+			return x.Error
+		}
+	}
+	return ""
+}
+
+type isSubmitResultRequest_Outcome interface {
+	isSubmitResultRequest_Outcome()
+}
+
+type SubmitResultRequest_Result struct {
+	Result float64 `protobuf:"fixed64,2,opt,name=result,proto3,oneof"`
+}
+
+type SubmitResultRequest_Error struct {
+	Error string `protobuf:"bytes,3,opt,name=error,proto3,oneof"`
+}
+
+func (*SubmitResultRequest_Result) isSubmitResultRequest_Outcome() {}
+
+func (*SubmitResultRequest_Error) isSubmitResultRequest_Outcome() {}
 
 // Ответ на отправку результата
 type SubmitResultResponse struct {
@@ -364,10 +402,12 @@ const file_internal_proto_calculator_proto_rawDesc = "" +
 	"\n" +
 	"depends_on\x18\x06 \x03(\tR\tdependsOn\x12\x1d\n" +
 	"\n" +
-	"user_login\x18\a \x01(\tR\tuserLogin\"F\n" +
+	"user_login\x18\a \x01(\tR\tuserLogin\"k\n" +
 	"\x13SubmitResultRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x16\n" +
-	"\x06result\x18\x02 \x01(\x02R\x06result\"0\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
+	"\x06result\x18\x02 \x01(\x01H\x00R\x06result\x12\x16\n" +
+	"\x05error\x18\x03 \x01(\tH\x00R\x05errorB\t\n" +
+	"\aoutcome\"0\n" +
 	"\x14SubmitResultResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"/\n" +
 	"\x14GetTaskResultRequest\x12\x17\n" +
@@ -422,6 +462,10 @@ func init() { file_internal_proto_calculator_proto_init() }
 func file_internal_proto_calculator_proto_init() {
 	if File_internal_proto_calculator_proto != nil {
 		return
+	}
+	file_internal_proto_calculator_proto_msgTypes[2].OneofWrappers = []any{
+		(*SubmitResultRequest_Result)(nil),
+		(*SubmitResultRequest_Error)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

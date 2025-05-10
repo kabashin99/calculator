@@ -67,12 +67,6 @@ func main() {
 	http.HandleFunc("GET /api/v1/expressions", OrchHandler.GetExpressions)
 	http.HandleFunc("GET /api/v1/expressions/{id}", OrchHandler.GetExpressionByID)
 
-	/*
-		http.HandleFunc("GET /internal/task", OrchHandler.GetTask)
-		http.HandleFunc("POST /internal/task", OrchHandler.SubmitResult)
-		http.HandleFunc("GET /internal/task/{id}", OrchHandler.GetTaskResult)
-	*/
-
 	go func() {
 		lis, err := net.Listen("tcp", ":50051")
 		if err != nil {
