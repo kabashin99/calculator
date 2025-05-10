@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+
+package calculator;
+
+option go_package = "internal/proto;proto";
+
+service OrchestratorService {
+  // Получение задачи
+  rpc GetTask (GetTaskRequest) returns (GetTaskResponse);
+
+  // Отправка результата
+  rpc SubmitResult (SubmitResultRequest) returns (SubmitResultResponse);
+
+  // Получение результата задачи по ID
+  rpc GetTaskResult (GetTaskResultRequest) returns (GetTaskResultResponse);
+}
+
+// Запрос на получение задачи
+message GetTaskRequest {
+  // Здесь можно добавить дополнительные параметры, если необходимо
+}
+
+// Ответ на получение задачи
+message GetTaskResponse {
+  string task_id      = 1;
+  string operation    = 2;
+  double arg1         = 3;
+  double arg2         = 4;
+  int32  operation_time = 5;
+  repeated string depends_on = 6;
+  string user_login   = 7;
+}
+
+// Запрос на отправку результата
+message SubmitResultRequest {
+  string task_id = 1;
+  float result = 2;
+}
+
+// Ответ на отправку результата
+message SubmitResultResponse {
+  bool success = 1;
+}
+
+// Запрос на получение результата задачи по ID
+message GetTaskResultRequest {
+  string task_id = 1;
+}
+
+// Ответ на получение результата задачи
+message GetTaskResultResponse {
+  google.protobuf.DoubleValue result = 1;
+  bool task_exists = 2;
+}

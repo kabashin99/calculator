@@ -70,7 +70,7 @@ func (h *Handler) CheckAuthorization(r *http.Request) (string, error) {
 		return "", fmt.Errorf("authorization header is missing")
 	}
 
-	cfg, err := config.LoadConfig("calculator/config/config.txt")
+	cfg, err := config.LoadConfig("config/config.txt")
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}

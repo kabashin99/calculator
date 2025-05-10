@@ -84,6 +84,6 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("error reading config file: %v", err)
 	}
 
-	log.Printf("Config loaded: %v\n", cfg)
+	log.Printf("Config loaded completed")
 	return cfg, nil
 }

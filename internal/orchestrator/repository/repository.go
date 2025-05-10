@@ -209,6 +209,8 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 	}
 
 	task.Status = TaskStatusProcessing
+
+	log.Printf("репозиторий отдает таску %+v", task)
 	return &task, true, nil
 }
 

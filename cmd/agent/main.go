@@ -13,7 +13,8 @@ func main() {
 	}
 
 	log.Printf("Agent started with %d workers", cfg.ComputingPower)
-	agentInstance := agent.NewAgent("http://localhost:8080", cfg.ComputingPower)
+	agentInstance := agent.NewAgent("localhost:50051", cfg.ComputingPower)
+	log.Println("gRPC агент запущен на порту 50051")
 	agentInstance.Start()
 
 	select {}
