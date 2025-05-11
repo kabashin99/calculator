@@ -25,7 +25,7 @@ REST API, JWT и хранения данных в SQLite.
 - `internal/proto`: определения gRPC-протоколов
 
 *Диаграмма архитектуры:*
-![](E:\Dev2\Calculator2\calculator_app\static\calc_diag.jpg)
+![](static/calc_diag.jpg)
 
 ---
 
