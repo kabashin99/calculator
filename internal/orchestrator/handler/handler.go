@@ -143,7 +143,7 @@ func (h *Handler) AddExpression(w http.ResponseWriter, r *http.Request) {
 		Expression string `json:"expression"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusUnprocessableEntity)
+		http.Error(w, "Invalid request", http.StatusUnprocessableEntity)
 		return
 	}
 

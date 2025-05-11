@@ -1,79 +1,97 @@
-# Проект Калькулятор
+# Калькулятор: микросервисное приложение
 
-роект представляет собой микросервисное приложение для обработки математических выражений с использованием gRPC, 
-авторизацией пользователей и хранением данных в базе данных. 
+Проект представляет собой микросервисную систему на Go для обработки арифметических выражений с использованием gRPC, 
+REST API, JWT и хранения данных в SQLite.
 
-## Архитектура
-Основные слои:
+---
 
-"orchestrator/service": бизнес-логика (регистрация, аутентификация, получение/обработка задач).
+## Технологии
+- **Язык:** Go 1.23.4
+- **API:** REST (JSON), gRPC
+- **База данных:** SQLite
+- **Безопасность:** JWT, bcrypt
+- **Тестирование:** `go test`, интеграционные тесты с тегом `integration`
 
-"repository": доступ к базе данных.
+---
 
-"grpc": реализация gRPC-сервера.
+## Архитектура проекта
 
-"models": структуры данных.
+**Основные компоненты:**
 
-"proto": определения gRPC-протоколов.
+- `orchestrator/service`: бизнес-логика (регистрация, аутентификация, обработка выражений)
+- `orchestrator/repository`: доступ к базе данных
+- `orchestrator/grpc`: gRPC-сервер
+- `internal/models`: структуры данных
+- `internal/proto`: определения gRPC-протоколов
 
-## База данных (SQLite)
-Таблицы:
+*Диаграмма архитектуры:*
+![](E:\Dev2\Calculator2\calculator_app\static\calc_diag.jpg)
 
-users: логин и хэш пароля.
+---
 
-tasks: математические задачи, зависимости (depends_on), результат.
 
-expressions: математическое выражение, итоговый результат.
+## Структура БД
+
+**Таблицы:**
+
+- `users`: логин, хэш пароля
+- `tasks`: арифметические подзадачи, статус, зависимости, результат
+- `expressions`: исходные выражения, итоговый результат и статус
+
+---
 
 ## Безопасность
-Используется bcrypt для хэширования паролей.
 
-JWT используется для аутентификации.
+- Пароли хэшируются с помощью **bcrypt**
+- Аутентификация реализована через **JWT**
+- Все защищённые эндпоинты требуют заголовка `Authorization: Bearer <token>`
 
-## Функциональность
+---
 
-Сервер принимает на вход строку, содержащую арифметическое выражение. Строка может включать:
+##  Основной функционал
 
-• Цифры (рациональные числа), представленные в виде односимвольных идентификаторов.
+- Поддержка операций: `+`, `-`, `*`, `/`, включая вложенные скобки
+- Сервис разбивает выражение на подзадачи и обрабатывает их с помощью агентов
+- Все данные пользователей и результаты сохраняются
 
-• Арифметические операции: сложение (+), вычитание (-), умножение (*) и деление (/).
+---
 
-• Скобки ( и ), которые используются для задания приоритета выполнения операций.
+##  REST API Оркестратора
 
-**API Оркестратора:** 
+- `POST /api/v1/register`: регистрация пользователя
+- `POST /api/v1/login`: вход и получение JWT
+- `POST /api/v1/calculate`: отправка выражения на вычисление
+- `GET /api/v1/expressions`: список выражений пользователя
+- `GET /api/v1/expressions/{id}`: информация по конкретному выражению
 
-    POST /api/v1/register - регистрация пользователя
-
-    POST /api/v1/login - аутентификация пользователя и получение JWT токена
-
-    POST /api/v1/calculate — отправка арифметического выражения (например, "2+2*2") для вычисления.
-
-    GET /api/v1/expressions — получение списка всех выражений с их статусами и результатами.
-
-    GET /api/v1/expressions/{id} — получение подробной информации по конкретному выражению.
-
-
+---
 
 **Агент (Worker):**
 
-Агент в цикле запрашивает задачи с эндпоинта /internal/task, выполняет операцию (с имитацией задержки, зависящей от переменных окружения) и отправляет результат обратно.
+Агент:
+
+- Получает задачи через gRPC у оркестратора
+- Выполняет операции с задержкой (зависит от конфигурации)
+- Отправляет результат обратно через gRPC
+
+---
 
 ## Статусы task и expression
 
-**task**
-  - "pending" - создана новая задача 
-  - "processing" - задача взята в обработку
-  - "completed" - задача завершена
-  - "division_by_zero" - ошибка задачи , деление на ноль
-  - "unknown_operation" - неизвестная операция 
-  - "internal_error" - внутренняя ошибка
+### `task`:
+  - `pending` - создана новая задача 
+  - `processing` - задача взята в обработку
+  - `completed` - задача завершена
+  - `division_by_zero` - ошибка задачи , деление на ноль
+  - `unknown_operation` - неизвестная операция 
+  - `internal_error` - внутренняя ошибка
 
-**expression**
-  - "pending" - создано новое выражение
-  - "done" - выполнена
-  - "division_by_zero" - ошибка выражения, деление на ноль
-  - "unknown_operation" - неизвестная операция
-  - "internal_error" - внутренняя ошибка 
+### `expression`:
+  - `pending` - создано новое выражение
+  - `done` - выполнена
+  - `division_by_zero` - ошибка выражения, деление на ноль
+  - `unknown_operation` - неизвестная операция
+  - `internal_error` - внутренняя ошибка 
 
 ## Установка и запуск
 
@@ -81,12 +99,9 @@ JWT используется для аутентификации.
 ```bash
 git clone https://github.com/kabashin99/calculator.git
 cd calculator
-```
-
-Установите все необходимые зависимости
-```bash
 go mod tidy
 ```
+
 
 ### Запуск оркестратора (сервера)
 
@@ -97,8 +112,8 @@ go run cmd/orchestrator/main.go
 
 ```
 
-Сообщение при успешном запуске оркестратора
-```bash
+Лог успешного запуска:
+```
 2025/05/11 15:19:59 Config loaded completed
 Running SQLite DB migrations...
 Migrating table: users
@@ -110,7 +125,7 @@ DB migrations completed
 
 ```
 
-### Запуск агента (демона)
+### Запуск агента (воркер)
 
 В отдельном терминале запустите агента. 
 
@@ -128,8 +143,8 @@ DB migrations completed
 
 ```
 
-### Параметры приложения
-Настройки расположены в файле *config/config.txt* 
+### Конфигурация
+Файл *config/config.txt* 
 ```
 # Конфигурация оркестратора
 TIME_ADDITION_MS=100  #  время выполнения операции сложения в миллисекундах 
@@ -144,63 +159,186 @@ COMPUTING_POWER=4  # Количество горутин
 
 ## Примеры запросов/ ответов
 
-### 1. Отправка выражения на вычисление
-
+### 1. Регистрация нового пользователя
+_Запрос:_
 ```bash
-curl --location 'http://localhost:8080/api/v1/calculate' `
---header 'Content-Type: application/json' `
---data '{"expression": "2+2*2"}'
+curl -X POST http://localhost:8080/api/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{"login":"user1","password":"pwd"}'
+```
+_Ответ:_
+#### Удачный ответ, http код 200
+```json
+{"status":"user 'test5' created successfully"}
+```
+#### Ошибка попытка повторной регистрации , http код 409
+```json
+Registration failed: failed to register user: user already exists
+``` 
+
+#### Ошибка некорректный запрос , http код 400
+```json
+Invalid request
 ```
 
-_Ожидаемый ответ (при успешном принятии выражения):_
+### 2. Вход зарегистрированного пользователя
+_Запрос:_
+```bash
+curl -X POST http://localhost:8080/api/v1/login \
+  -H "Content-Type: application/json" \
+  -d '{"login":"user1","password":"pwd"}'
+```
+_Ответ:_
+#### Удачный ответ , http код 200
+```json
+    "expires_at": "2025-05-12T12:49:14+03:00",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDcwNDMzNTQsImlhdCI6MTc0Njk1Njk1NCwibG9naW4iOiJ0ZXN0MiJ9.SpxcS9a5jgR0LMtC-fq9AcYtRN5jg7zgdQ5iYnAlou4"
+```
 
+#### Ошибка некорректный запрос , http код 400
+```json
+Invalid request
+```
+
+#### Ошибка ошибка аутентификации , http код 401
+```json
+ Authentication failed
+```
+
+### 3. Отправка выражения
+Для удачного запроса в Authorization перенести токен , пример :
+'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDcwNDMzNTQsImlhdCI6MTc0Njk1Njk1NCwibG9naW4iOiJ0ZXN0MiJ9.SpxcS9a5jgR0LMtC-fq9AcYtRN5jg7zgdQ5iYnAlou4'
+
+_Запрос:_
+```bash
+curl -X POST http://localhost:8080/api/v1/calculate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{"expression":"2+2*2"}'
+```
+
+_Ответ:_
+#### Удачный ответ , http код 201
 ```json
 {"id":"550cf23a-4cd3-40d8-b1df-820d44c23479"}
 ```
-### 2. Получение списка выражений
 
-```bash
-curl --location 'http://localhost:8080/api/v1/expressions'
+#### Ошибка некорректный запрос , http код 400
+```
+Invalid request
 ```
 
-_Пример ответа:_
+#### Ошибка ошибка аутентификации , http код 401
+```
+ Authentication failed
+```
 
+#### Ошибка пользователь не найден , http код 403
+```
+ User not found
+```
+
+#### Ошибка выражения , http код 422
+```
+ invalid request
+```
+
+#### Ошибка сервера, http код 500
+```
+Internal server error
+```
+
+
+
+### 4. Список выражений
+Для удачного запроса в Authorization перенести токен , пример :
+'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDcwNDMzNTQsImlhdCI6MTc0Njk1Njk1NCwibG9naW4iOiJ0ZXN0MiJ9.SpxcS9a5jgR0LMtC-fq9AcYtRN5jg7zgdQ5iYnAlou4'
+
+_Запрос:_
 ```bash
-{
-    "expressions": [
-        {"id": 550cf23a-4cd3-40d8-b1df-820d44c23479, "status": "completed", "result": 6},
-        {"id": 111cf23a-4cd3-40d8-b2df-820d44c23234, "status": "pending", "result": NaN}
-    ]
+curl http://localhost:8080/api/v1/expressions \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+_Ответ:_
+#### Удачный ответ, http код 200
+```json
+{"expressions":
+  [
+    {"id":"ee409ffe-dd05-430b-bd3f-80b239b14a2d","status":"division_by_zero","result":0,"owner":"test2"},
+    {"id":"fd3c0722-e236-4c9b-a837-1fd7df54173a","status":"done","result":33,"owner":"test2"}
+  ]
 }
 ```
-### 3. Получение информации по конкретному выражению
+#### Ошибка аутентификации, http код 401
+```
+ Authentication failed
+```
 
+#### Ошибка пользователь не найден, http код 403
+```
+ User not found
+```
 
+#### Ошибка сервера, http код 500
+```
+Internal server error
+```
+
+## 5. Информация по выражению
+Для удачного запроса в Authorization перенести токен , пример :
+'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDcwNDMzNTQsImlhdCI6MTc0Njk1Njk1NCwibG9naW4iOiJ0ZXN0MiJ9.SpxcS9a5jgR0LMtC-fq9AcYtRN5jg7zgdQ5iYnAlou4'
+
+Внести в адрес http://localhost:8080/api/v1/expressions/{id} id выражения 
+
+_Запрос:_
 ```bash
-curl --location 'http://localhost:8080/api/v1/expressions/550cf23a-4cd3-40d8-b1df-820d44c23479'
+curl http://localhost:8080/api/v1/expressions/<id> \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+_Ответ:_
+```json
+{"expression":{"id":"fd980e11-f026-420c-aee7-8b71b2f2e0f3","status":"done","result":33,"owner":"test2"}}
+
+```
+#### Ошибка аутентификации, http код 401
+```
+ Authentication failed
+```
+
+#### Ошибка пользователь не найден, http код 403
+```
+ User not found
+```
+
+#### Ошибка id не найден, http код 404
+```
+expression not found
+```
+
+#### Ошибка сервера, http код 500
+```
+Internal server error
+```
+
+
+## Тестирование
+
+Юнит-тесты:
+```bash
+go test -cover ./...
 
 ```
 
-_Пример ответа:_
-
-```bash
-{"expression":{"id":"550cf23a-4cd3-40d8-b1df-820d44c23479","status":"done","result":6}}
-
-```
-
-## Тесты
-
-Запуск модульных тестов из корневой директории :
-```bash
-go test -cover calculator_app/...
-
-```
-
-Запуск интеграционных тестов из корневой директории :
+Интеграционные тесты:
 ```bash
 go test -tags=integration ./cmd/orchestrator
 
 ```
+## Примечание
+Проект протестирован на Windows.
+Время выполнения операций управляется через конфигурацию.
 
 Автор: Абашин Ярослав
 Telegram: @kabashin
