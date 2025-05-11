@@ -15,12 +15,14 @@ import (
 
 type Agent struct {
 	orchestratorURL string
-	computingPower  int
+	ComputingPower  int
 	db              *sql.DB
-	client          pb.OrchestratorServiceClient
+	Client          pb.OrchestratorServiceClient
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
-func NewAgent(orchestratorURL string, computingPower int) *Agent {
+func NewAgent(orchestratorURL string, ComputingPower int) *Agent {
 	conn, err := grpc.NewClient(
 		orchestratorURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -30,23 +32,33 @@ func NewAgent(orchestratorURL string, computingPower int) *Agent {
 	}
 
 	client := pb.NewOrchestratorServiceClient(conn)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Agent{
 		orchestratorURL: orchestratorURL,
-		computingPower:  computingPower,
-		client:          client,
+		ComputingPower:  ComputingPower,
+		Client:          client,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 }
 
 func (a *Agent) Start() {
-	for i := 0; i < a.computingPower; i++ {
+	for i := 0; i < a.ComputingPower; i++ {
 		go a.worker()
 	}
 }
 
 func (a *Agent) worker() {
 	for {
-		task, err := a.fetchTask()
+		select {
+		case <-a.ctx.Done():
+			log.Println("Worker shutting down")
+			return
+		default:
+		}
+
+		task, err := a.FetchTask()
 		if err != nil {
 			log.Printf("Failed to fetch task: %v", err)
 			time.Sleep(1 * time.Second)
@@ -55,7 +67,7 @@ func (a *Agent) worker() {
 
 		for _, depID := range task.DependsOn {
 			for attempt := 0; attempt < 10; attempt++ {
-				result, err := a.getDependencyResult(depID)
+				result, err := a.GetDependencyResult(depID)
 				if err == nil {
 					if task.Arg1 == 0 {
 						task.Arg1 = result
@@ -76,56 +88,42 @@ func (a *Agent) worker() {
 			continue
 		}
 
-		result, err := a.executeTask(task)
+		result, err := a.ExecuteTask(task)
 		if err != nil {
 			log.Printf("Task %s failed: %v", task.ID, err)
 
 			var taskErr *models.TaskError
 			if errors.As(err, &taskErr) {
-				if subErr := a.submitWithRetry(task.ID, nil, 3, taskErr); subErr != nil {
+				if subErr := a.SubmitWithRetry(task.ID, nil, 3, taskErr); subErr != nil {
 					log.Printf("Failed to submit error for task %s: %v", task.ID, subErr)
 				}
 			} else {
 				internalErr := models.NewTaskError(models.ErrInternalError, err.Error())
-				_ = a.submitWithRetry(task.ID, nil, 3, internalErr)
+				_ = a.SubmitWithRetry(task.ID, nil, 3, internalErr)
 			}
 			continue
 		}
 
-		if err := a.submitWithRetry(task.ID, &result, 3, nil); err != nil {
+		if err := a.SubmitWithRetry(task.ID, &result, 3, nil); err != nil {
 			log.Printf("Failed to submit result for task %s: %v", task.ID, err)
 		}
 	}
 }
 
-func (a *Agent) waitForDependencies(task *models.Task) error {
-	resolved := 0
-	for _, depID := range task.DependsOn {
-		for attempt := 0; attempt < 10; attempt++ {
-			result, err := a.getDependencyResult(depID)
-			if err == nil {
-				if resolved == 0 {
-					task.Arg1 = result
-				} else {
-					task.Arg2 = result
-				}
-				resolved++
-				break
-			}
-			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
-		}
+func (a *Agent) Stop() {
+	if a.cancel != nil {
+		a.cancel()
 	}
-	return nil
 }
 
-func (a *Agent) submitWithRetry(taskID string, result *float64, maxRetries int, taskErr *models.TaskError) error {
+func (a *Agent) SubmitWithRetry(taskID string, result *float64, maxRetries int, taskErr *models.TaskError) error {
 	var lastErr error
 	for i := 0; i < maxRetries; i++ {
 		var err error
 		if taskErr != nil {
-			err = a.submitError(taskID, taskErr)
+			err = a.SubmitError(taskID, taskErr)
 		} else {
-			err = a.submitResult(taskID, result)
+			err = a.SubmitResult(taskID, result)
 		}
 
 		if err == nil {
@@ -137,8 +135,8 @@ func (a *Agent) submitWithRetry(taskID string, result *float64, maxRetries int, 
 	return fmt.Errorf("after %d attempts: %w", maxRetries, lastErr)
 }
 
-func (a *Agent) fetchTask() (*models.Task, error) {
-	resp, err := a.client.GetTask(context.Background(), &pb.GetTaskRequest{})
+func (a *Agent) FetchTask() (*models.Task, error) {
+	resp, err := a.Client.GetTask(context.Background(), &pb.GetTaskRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +152,7 @@ func (a *Agent) fetchTask() (*models.Task, error) {
 	}, nil
 }
 
-func (a *Agent) executeTask(task *models.Task) (float64, error) {
+func (a *Agent) ExecuteTask(task *models.Task) (float64, error) {
 	log.Printf("Executing task: %s %f %s %f", task.Operation, task.Arg1, task.Operation, task.Arg2)
 	time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
 
@@ -177,8 +175,8 @@ func (a *Agent) executeTask(task *models.Task) (float64, error) {
 	}
 }
 
-func (a *Agent) submitResult(taskID string, result *float64) error {
-	_, err := a.client.SubmitResult(context.Background(), &pb.SubmitResultRequest{
+func (a *Agent) SubmitResult(taskID string, result *float64) error {
+	_, err := a.Client.SubmitResult(context.Background(), &pb.SubmitResultRequest{
 		TaskId: taskID,
 		Outcome: &pb.SubmitResultRequest_Result{
 			Result: *result,
@@ -187,8 +185,8 @@ func (a *Agent) submitResult(taskID string, result *float64) error {
 	return err
 }
 
-func (a *Agent) submitError(taskID string, taskErr *models.TaskError) error {
-	_, err := a.client.SubmitResult(context.Background(), &pb.SubmitResultRequest{
+func (a *Agent) SubmitError(taskID string, taskErr *models.TaskError) error {
+	_, err := a.Client.SubmitResult(context.Background(), &pb.SubmitResultRequest{
 		TaskId: taskID,
 		Outcome: &pb.SubmitResultRequest_Error{
 			Error: string(taskErr.Code),
@@ -197,8 +195,8 @@ func (a *Agent) submitError(taskID string, taskErr *models.TaskError) error {
 	return err
 }
 
-func (a *Agent) getDependencyResult(taskID string) (float64, error) {
-	resp, err := a.client.GetTaskResult(context.Background(), &pb.GetTaskResultRequest{TaskId: taskID})
+func (a *Agent) GetDependencyResult(taskID string) (float64, error) {
+	resp, err := a.Client.GetTaskResult(context.Background(), &pb.GetTaskResultRequest{TaskId: taskID})
 	if err != nil || !resp.TaskExists {
 		return 0, fmt.Errorf("result not available")
 	}
@@ -208,4 +206,14 @@ func (a *Agent) getDependencyResult(taskID string) (float64, error) {
 	}
 
 	return 0, fmt.Errorf("result not available")
+}
+
+func NewTestAgent(client pb.OrchestratorServiceClient, power int) *Agent {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Agent{
+		Client:         client,
+		ComputingPower: power,
+		ctx:            ctx,
+		cancel:         cancel,
+	}
 }

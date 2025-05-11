@@ -28,11 +28,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type OrchestratorServiceClient interface {
-	// Получение задачи
 	GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error)
-	// Отправка результата
 	SubmitResult(ctx context.Context, in *SubmitResultRequest, opts ...grpc.CallOption) (*SubmitResultResponse, error)
-	// Получение результата задачи по ID
 	GetTaskResult(ctx context.Context, in *GetTaskResultRequest, opts ...grpc.CallOption) (*GetTaskResultResponse, error)
 }
 
@@ -78,11 +75,8 @@ func (c *orchestratorServiceClient) GetTaskResult(ctx context.Context, in *GetTa
 // All implementations must embed UnimplementedOrchestratorServiceServer
 // for forward compatibility.
 type OrchestratorServiceServer interface {
-	// Получение задачи
 	GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error)
-	// Отправка результата
 	SubmitResult(context.Context, *SubmitResultRequest) (*SubmitResultResponse, error)
-	// Получение результата задачи по ID
 	GetTaskResult(context.Context, *GetTaskResultRequest) (*GetTaskResultResponse, error)
 	mustEmbedUnimplementedOrchestratorServiceServer()
 }

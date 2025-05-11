@@ -14,6 +14,12 @@ type OrchestratorGRPCServer struct {
 	orc *service.Orchestrator
 }
 
+type Orchestrator interface {
+	GetTask() (*models.Task, bool, error)
+	SubmitResult(taskID string, result float64, taskErr *models.TaskError) (bool, error)
+	GetTaskResult(taskID string) (float64, bool, error)
+}
+
 func NewOrchestratorGRPCServer(orc *service.Orchestrator) *OrchestratorGRPCServer {
 	return &OrchestratorGRPCServer{orc: orc}
 }

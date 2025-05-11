@@ -20,6 +20,23 @@ type Repository struct {
 	db *sql.DB
 }
 
+type RepositoryInterface interface {
+	AddExpression(expr *models.Expression) error
+	AddTask(task *models.Task) error
+	GetAndLockTask() (*models.Task, bool, error)
+	UpdateTaskResult(taskID string, result *float64, taskErr *models.TaskError) (bool, string, error)
+	UpdateExpression(id string, status string, result float64) (bool, error)
+	CalculateFinalResult(expressionID string) (float64, error)
+	AreAllTasksCompleted(expressionID string) (bool, error)
+	GetExpressionsByOwner(owner string) (map[string]*models.Expression, error)
+	GetExpressionByIDAndOwner(id, owner string) (*models.Expression, bool, error)
+	RegisterUser(user models.User) error
+	FindUser(login string) (*models.User, error)
+	GetTaskResult(taskID string) (float64, bool, error)
+}
+
+var ErrUserExists = errors.New("user already exists")
+
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
@@ -64,10 +81,13 @@ func (r *Repository) RegisterUser(user models.User) error {
 		`INSERT INTO users (login, password) VALUES (?, ?)`,
 		user.Login, user.Password,
 	)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: users.login") {
+		return ErrUserExists
+	}
 	return err
 }
 
-func (r *Repository) FindUser(login string) (models.User, error) {
+func (r *Repository) FindUser(login string) (*models.User, error) {
 	var user models.User
 	err := r.db.QueryRow(
 		`SELECT login, password FROM users WHERE login = ?`,
@@ -75,10 +95,10 @@ func (r *Repository) FindUser(login string) (models.User, error) {
 	).Scan(&user.Login, &user.Password)
 
 	if err != nil {
-		return models.User{}, err
+		return &models.User{}, err
 	}
 
-	return user, err
+	return &user, err
 }
 
 func (r *Repository) GetTaskResult(taskID string) (float64, bool, error) {

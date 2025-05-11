@@ -22,7 +22,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Запрос на получение задачи
 type GetTaskRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -59,7 +58,6 @@ func (*GetTaskRequest) Descriptor() ([]byte, []int) {
 	return file_internal_proto_calculator_proto_rawDescGZIP(), []int{0}
 }
 
-// Ответ на получение задачи
 type GetTaskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -152,7 +150,6 @@ func (x *GetTaskResponse) GetUserLogin() string {
 	return ""
 }
 
-// Запрос на отправку результата
 type SubmitResultRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	TaskId string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -243,7 +240,6 @@ func (*SubmitResultRequest_Result) isSubmitResultRequest_Outcome() {}
 
 func (*SubmitResultRequest_Error) isSubmitResultRequest_Outcome() {}
 
-// Ответ на отправку результата
 type SubmitResultResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -288,7 +284,6 @@ func (x *SubmitResultResponse) GetSuccess() bool {
 	return false
 }
 
-// Запрос на получение результата задачи по ID
 type GetTaskResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -333,7 +328,6 @@ func (x *GetTaskResultRequest) GetTaskId() string {
 	return ""
 }
 
-// Ответ на получение результата задачи
 type GetTaskResultResponse struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Result        *wrapperspb.DoubleValue `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`

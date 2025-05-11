@@ -17,14 +17,24 @@ import (
 )
 
 type Orchestrator struct {
-	repo                 *repository.Repository
+	//repo                 *repository.Repository
+	repo                 repository.RepositoryInterface
 	timeAdditionMS       int
 	timeSubtractionMS    int
 	timeMultiplicationMS int
 	timeDivisionMS       int
 }
 
-func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo *repository.Repository) *Orchestrator {
+type OrchestratorInterface interface {
+	RegisterUser(user models.User) error
+	Authenticate(login, password string) (string, time.Time, error)
+	UserExists(login string) (bool, error)
+	AddExpression(expr string, login string) (string, error)
+	GetExpressions(owner string) (map[string]*models.Expression, error)
+	GetExpressionByID(id, owner string) (*models.Expression, bool, error)
+}
+
+func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo repository.RepositoryInterface) *Orchestrator {
 	return &Orchestrator{
 		repo:                 repo,
 		timeAdditionMS:       timeAdditionMS,
@@ -353,7 +363,16 @@ func (o *Orchestrator) RegisterUser(user models.User) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 	user.Password = string(hashedPassword)
-	return o.repo.RegisterUser(user)
+	err = o.repo.RegisterUser(user)
+	if err != nil {
+		// Проверяем, содержит ли ошибка текст про уникальность логина
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.login") {
+			return fmt.Errorf("user '%s' already exists", user.Login)
+		}
+		return fmt.Errorf("failed to register user: %w", err)
+	}
+
+	return nil
 }
 
 func (o *Orchestrator) Authenticate(login, password string) (string, time.Time, error) {

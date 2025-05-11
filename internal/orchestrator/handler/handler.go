@@ -12,11 +12,23 @@ import (
 	"time"
 )
 
+/*
 type Handler struct {
 	orc *service.Orchestrator
 }
 
 func NewHandler(orc *service.Orchestrator) *Handler {
+	return &Handler{
+		orc: orc,
+	}
+}
+*/
+
+type Handler struct {
+	orc service.OrchestratorInterface
+}
+
+func NewHandler(orc service.OrchestratorInterface) *Handler {
 	return &Handler{
 		orc: orc,
 	}
