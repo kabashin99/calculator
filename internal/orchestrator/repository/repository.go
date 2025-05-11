@@ -20,6 +20,23 @@ type Repository struct {
 	db *sql.DB
 }
 
+type RepositoryInterface interface {
+	AddExpression(expr *models.Expression) error
+	AddTask(task *models.Task) error
+	GetAndLockTask() (*models.Task, bool, error)
+	UpdateTaskResult(taskID string, result *float64, taskErr *models.TaskError) (bool, string, error)
+	UpdateExpression(id string, status string, result float64) (bool, error)
+	CalculateFinalResult(expressionID string) (float64, error)
+	AreAllTasksCompleted(expressionID string) (bool, error)
+	GetExpressionsByOwner(owner string) (map[string]*models.Expression, error)
+	GetExpressionByIDAndOwner(id, owner string) (*models.Expression, bool, error)
+	RegisterUser(user models.User) error
+	FindUser(login string) (*models.User, error)
+	GetTaskResult(taskID string) (float64, bool, error)
+}
+
+var ErrUserExists = errors.New("user already exists")
+
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
@@ -64,10 +81,13 @@ func (r *Repository) RegisterUser(user models.User) error {
 		`INSERT INTO users (login, password) VALUES (?, ?)`,
 		user.Login, user.Password,
 	)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: users.login") {
+		return ErrUserExists
+	}
 	return err
 }
 
-func (r *Repository) FindUser(login string) (models.User, error) {
+func (r *Repository) FindUser(login string) (*models.User, error) {
 	var user models.User
 	err := r.db.QueryRow(
 		`SELECT login, password FROM users WHERE login = ?`,
@@ -75,10 +95,10 @@ func (r *Repository) FindUser(login string) (models.User, error) {
 	).Scan(&user.Login, &user.Password)
 
 	if err != nil {
-		return models.User{}, err
+		return &models.User{}, err
 	}
 
-	return user, err
+	return &user, err
 }
 
 func (r *Repository) GetTaskResult(taskID string) (float64, bool, error) {
@@ -139,7 +159,6 @@ func (r *Repository) GetExpressionByIDAndOwner(id string, owner string) (*models
 }
 
 func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
-	// log.Println("Executing GetAndLockTask query...")
 
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -210,32 +229,52 @@ func (r *Repository) GetAndLockTask() (*models.Task, bool, error) {
 
 	task.Status = TaskStatusProcessing
 
-	log.Printf("репозиторий отдает таску %+v", task)
 	return &task, true, nil
 }
 
-func (r *Repository) UpdateTaskResult(taskID string, result float64) (bool, error) {
+func (r *Repository) UpdateTaskResult(taskID string, result *float64, taskErr *models.TaskError) (bool, string, error) {
+	var (
+		status      string
+		resultValue sql.NullFloat64
+		//errorMessage sql.NullString
+	)
+	if taskErr != nil {
+		status = string(taskErr.Code)
+		resultValue = sql.NullFloat64{}
+		//errorMessage = sql.NullString{
+		//	String: taskErr.Message,
+		//	Valid:  true,
+		//}
+	} else {
+		status = TaskStatusCompleted
+		resultValue = sql.NullFloat64{
+			Float64: *result,
+			Valid:   true,
+		}
+		//errorMessage = sql.NullString{} // нет ошибки — поле пустое
+	}
+
 	res, err := r.db.Exec(
 		`UPDATE tasks SET 
             result = ?, 
             status = ?,
             updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND status = ?`,
-		result,
-		TaskStatusCompleted,
+		resultValue,
+		status,
 		taskID,
 		TaskStatusProcessing,
 	)
 	if err != nil {
-		return false, fmt.Errorf("failed to update task result: %w", err)
+		return false, "", fmt.Errorf("failed to update task result: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return false, fmt.Errorf("failed to get rows affected: %w", err)
+		return false, "", fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
-	return rowsAffected > 0, nil
+	return rowsAffected > 0, status, nil
 }
 
 func (r *Repository) AreAllTasksCompleted(exprID string) (bool, error) {
@@ -271,12 +310,17 @@ func (r *Repository) CalculateFinalResult(exprID string) (float64, error) {
 	return result, err
 }
 
-func (r *Repository) UpdateExpression(exprID string, result float64) (bool, error) {
+func (r *Repository) UpdateExpression(exprID string, status string, result float64) (bool, error) {
+
+	if status == TaskStatusCompleted {
+		status = ExprStatusDone
+	}
+
 	res, err := r.db.Exec(
 		`UPDATE expressions 
 			   SET status = ?, result = ? 
 			   WHERE id = ?`,
-		ExprStatusDone, result, exprID,
+		status, result, exprID,
 	)
 
 	if err != nil {

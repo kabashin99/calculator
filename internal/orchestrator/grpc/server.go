@@ -2,15 +2,22 @@ package grpc
 
 import (
 	"calculator_app/internal/orchestrator/service"
+	"calculator_app/internal/pkg/models"
 	pb "calculator_app/internal/proto"
 	"context"
+	"fmt"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"log"
 )
 
 type OrchestratorGRPCServer struct {
 	pb.UnimplementedOrchestratorServiceServer
 	orc *service.Orchestrator
+}
+
+type Orchestrator interface {
+	GetTask() (*models.Task, bool, error)
+	SubmitResult(taskID string, result float64, taskErr *models.TaskError) (bool, error)
+	GetTaskResult(taskID string) (float64, bool, error)
 }
 
 func NewOrchestratorGRPCServer(orc *service.Orchestrator) *OrchestratorGRPCServer {
@@ -20,7 +27,6 @@ func NewOrchestratorGRPCServer(orc *service.Orchestrator) *OrchestratorGRPCServe
 func (s *OrchestratorGRPCServer) GetTask(ctx context.Context, _ *pb.GetTaskRequest) (*pb.GetTaskResponse, error) {
 	task, exists, err := s.orc.GetTask()
 	if err != nil || !exists {
-		//log.Printf("grps server FALSE Task %t или ошибка : %s", exists, err)
 		return nil, err
 	}
 
@@ -34,12 +40,24 @@ func (s *OrchestratorGRPCServer) GetTask(ctx context.Context, _ *pb.GetTaskReque
 		UserLogin:     task.UserLogin,
 	}
 
-	log.Printf("grpc сервер отдает таску %+v", task)
 	return resp, nil
 }
 
 func (s *OrchestratorGRPCServer) SubmitResult(ctx context.Context, req *pb.SubmitResultRequest) (*pb.SubmitResultResponse, error) {
-	success, err := s.orc.SubmitResult(req.TaskId, float64(req.Result))
+	var (
+		success bool
+		err     error
+	)
+	switch outcome := req.Outcome.(type) {
+	case *pb.SubmitResultRequest_Result:
+		success, err = s.orc.SubmitResult(req.TaskId, outcome.Result, nil)
+	case *pb.SubmitResultRequest_Error:
+		taskErr := models.NewTaskError(models.TaskErrorCode(outcome.Error), outcome.Error)
+		success, err = s.orc.SubmitResult(req.TaskId, 0, taskErr)
+	default:
+		return nil, fmt.Errorf("invalid outcome in SubmitResultRequest")
+	}
+
 	if err != nil {
 		return nil, err
 	}

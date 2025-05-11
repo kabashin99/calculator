@@ -12,11 +12,23 @@ import (
 	"time"
 )
 
+/*
 type Handler struct {
 	orc *service.Orchestrator
 }
 
 func NewHandler(orc *service.Orchestrator) *Handler {
+	return &Handler{
+		orc: orc,
+	}
+}
+*/
+
+type Handler struct {
+	orc service.OrchestratorInterface
+}
+
+func NewHandler(orc service.OrchestratorInterface) *Handler {
 	return &Handler{
 		orc: orc,
 	}
@@ -131,17 +143,17 @@ func (h *Handler) AddExpression(w http.ResponseWriter, r *http.Request) {
 		Expression string `json:"expression"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusUnprocessableEntity) // 422
+		http.Error(w, "Invalid request", http.StatusUnprocessableEntity)
 		return
 	}
 
 	id, err := h.orc.AddExpression(req.Expression, login)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity) //422
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated) // 201
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
 
@@ -185,12 +197,12 @@ func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !exists {
-		http.Error(w, "expression not found", http.StatusNotFound) //404
+		http.Error(w, "expression not found", http.StatusNotFound)
 		return
 	}
 
 	if expr.Owner != owner {
-		http.Error(w, "Unauthorized access", http.StatusUnauthorized) // 401
+		http.Error(w, "Unauthorized access", http.StatusUnauthorized)
 		return
 	}
 
@@ -199,68 +211,4 @@ func (h *Handler) GetExpressionByID(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to encode response: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
-}
-
-func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
-	//log.Println("Fetching available tasks from database...")
-	task, exists, err := h.orc.GetTask()
-	if err != nil {
-		log.Printf("Error fetching task: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if !exists {
-		// log.Println("No pending tasks found in database")
-		http.Error(w, "no tasks available", http.StatusNotFound) //404
-		return
-	}
-
-	log.Printf("Returning task: ID=%s, Operation=%s", task.ID, task.Operation)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"task": task})
-}
-
-func (h *Handler) SubmitResult(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID     string  `json:"id"`
-		Result float64 `json:"result"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
-		return
-	}
-
-	success, err := h.orc.SubmitResult(req.ID, req.Result)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if !success {
-		http.Error(w, "task not found or already completed", http.StatusConflict)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *Handler) GetTaskResult(w http.ResponseWriter, r *http.Request) {
-	taskID := r.PathValue("id")
-
-	result, exists, err := h.orc.GetTaskResult(taskID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !exists {
-		http.Error(w, "result not ready", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]float64{
-		"result": result,
-	})
 }

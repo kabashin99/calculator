@@ -17,14 +17,24 @@ import (
 )
 
 type Orchestrator struct {
-	repo                 *repository.Repository
+	//repo                 *repository.Repository
+	repo                 repository.RepositoryInterface
 	timeAdditionMS       int
 	timeSubtractionMS    int
 	timeMultiplicationMS int
 	timeDivisionMS       int
 }
 
-func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo *repository.Repository) *Orchestrator {
+type OrchestratorInterface interface {
+	RegisterUser(user models.User) error
+	Authenticate(login, password string) (string, time.Time, error)
+	UserExists(login string) (bool, error)
+	AddExpression(expr string, login string) (string, error)
+	GetExpressions(owner string) (map[string]*models.Expression, error)
+	GetExpressionByID(id, owner string) (*models.Expression, bool, error)
+}
+
+func NewOrchestrator(timeAdditionMS, timeSubtractionMS, timeMultiplicationMS, timeDivisionMS int, repo repository.RepositoryInterface) *Orchestrator {
 	return &Orchestrator{
 		repo:                 repo,
 		timeAdditionMS:       timeAdditionMS,
@@ -38,7 +48,7 @@ func (o *Orchestrator) AddExpression(expression string, owner string) (string, e
 	id := generateUUID()
 	err := o.repo.AddExpression(&models.Expression{
 		ID:     id,
-		Status: "pending",
+		Status: repository.TaskStatusPending,
 		Result: nil,
 		Owner:  owner,
 	})
@@ -236,7 +246,6 @@ func (o *Orchestrator) GetExpressionByID(id string, owner string) (*models.Expre
 }
 
 func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
-	// log.Println("Getting task from repository...")
 	task, exists, err := o.repo.GetAndLockTask()
 	if err != nil {
 		log.Printf("Repository error: %v", err)
@@ -244,17 +253,20 @@ func (o *Orchestrator) GetTask() (*models.Task, bool, error) {
 	}
 
 	if !exists {
-		//log.Println("No tasks available in repository")
 	} else {
 		log.Printf("Found task: %+v", task)
 	}
-	//log.Printf("оркестратор отдает таску %+v", task)
 
 	return task, exists, nil
 }
 
-func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error) {
-	updated, err := o.repo.UpdateTaskResult(taskID, result)
+func (o *Orchestrator) SubmitResult(taskID string, result float64, taskErr *models.TaskError) (bool, error) {
+	var resultPtr *float64
+	if taskErr == nil {
+		resultPtr = &result
+	}
+
+	updated, status, err := o.repo.UpdateTaskResult(taskID, resultPtr, taskErr)
 	if err != nil {
 		return false, fmt.Errorf("failed to update task: %w", err)
 	}
@@ -267,6 +279,11 @@ func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error)
 		return false, fmt.Errorf("invalid taskID format: %s", taskID)
 	}
 	exprID := strings.Join(parts[:5], "-")
+
+	if status != repository.TaskStatusCompleted {
+		_, _ = o.repo.UpdateExpression(exprID, status, 0)
+		return true, nil
+	}
 
 	allDone, err := o.repo.AreAllTasksCompleted(exprID)
 	if err != nil {
@@ -282,7 +299,7 @@ func (o *Orchestrator) SubmitResult(taskID string, result float64) (bool, error)
 		return false, fmt.Errorf("failed to calculate result: %w", err)
 	}
 
-	exprUpdated, err := o.repo.UpdateExpression(exprID, finalResult)
+	exprUpdated, err := o.repo.UpdateExpression(exprID, repository.TaskStatusCompleted, finalResult)
 	if err != nil {
 		return false, fmt.Errorf("failed to update expression: %w", err)
 	}
@@ -346,7 +363,16 @@ func (o *Orchestrator) RegisterUser(user models.User) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 	user.Password = string(hashedPassword)
-	return o.repo.RegisterUser(user)
+	err = o.repo.RegisterUser(user)
+	if err != nil {
+		// Проверяем, содержит ли ошибка текст про уникальность логина
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.login") {
+			return fmt.Errorf("user '%s' already exists", user.Login)
+		}
+		return fmt.Errorf("failed to register user: %w", err)
+	}
+
+	return nil
 }
 
 func (o *Orchestrator) Authenticate(login, password string) (string, time.Time, error) {
